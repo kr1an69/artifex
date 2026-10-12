@@ -1,0 +1,44 @@
+# ==============================================================================
+# Artifex Monorepo Root .gitignore
+# ==============================================================================
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+
+# Build artifacts & caches
+target/
+build/
+.gradle/
+bin/
+out/
+
+# Android specific secrets & local configs
+local.properties
+.navigation/
+captures/
+output.json
+
+# Environment variables & secrets
+.env
+*.env
+*.log
+
+*.md
+!README.md
