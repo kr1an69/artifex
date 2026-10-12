@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Artifex</string>
+
+    <!-- Bottom Navigation Tabs -->
+    <string name="nav_catalog">Linh kiện</string>
+    <string name="nav_store">Cửa hàng</string>
+    <string name="nav_cart">Giỏ hàng</string>
+    <string name="nav_detail">Chi tiết</string>
+    <string name="nav_auth">Tài khoản</string>
+</resources>

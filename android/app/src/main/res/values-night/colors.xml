@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base standard colors -->
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <!-- Artifex Dark Neutral Tokens -->
+    <color name="artifex_bg">#0B0F19</color>
+    <color name="artifex_surface">#151C2C</color>
+    <color name="artifex_surface_variant">#1B2438</color>
+    <color name="artifex_border">#23324A</color>
+    <color name="artifex_text_primary">#F0F4F8</color>
+    <color name="artifex_text_secondary">#8A99AD</color>
+    <color name="artifex_text_muted">#52637A</color>
+
+    <!-- Artifex Brand Tokens (Dark Mode: Cyber Cyan & Amber) -->
+    <color name="artifex_primary">#00F0FF</color>
+    <color name="artifex_primary_variant">#33F3FF</color>
+    <color name="artifex_on_primary">#070B12</color>
+    <color name="artifex_accent">#FF9E00</color>
+    <color name="artifex_on_accent">#000000</color>
+
+    <!-- Artifex Feedback Tokens -->
+    <color name="artifex_success">#22C55E</color>
+    <color name="artifex_error">#EF4444</color>
+</resources>

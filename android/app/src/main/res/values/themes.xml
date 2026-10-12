@@ -1,0 +1,26 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Base.Theme.Artifex" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Font Families -->
+        <item name="fontFamily">@font/be_vietnam_pro</item>
+        <item name="android:fontFamily">@font/be_vietnam_pro</item>
+
+        <!-- Brand Colors -->
+        <item name="colorPrimary">@color/artifex_primary</item>
+        <item name="colorOnPrimary">@color/artifex_on_primary</item>
+        <item name="colorTertiary">@color/artifex_accent</item>
+        <item name="colorOnTertiary">@color/artifex_on_accent</item>
+
+        <!-- Surfaces & Backgrounds -->
+        <item name="android:windowBackground">@color/artifex_bg</item>
+        <item name="colorSurface">@color/artifex_surface</item>
+        <item name="colorSurfaceVariant">@color/artifex_surface_variant</item>
+        <item name="colorOutline">@color/artifex_border</item>
+
+        <!-- Status Bar -->
+        <item name="android:statusBarColor">@color/artifex_bg</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+
+    <style name="Theme.Artifex" parent="Base.Theme.Artifex" />
+</resources>
