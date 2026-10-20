@@ -83,7 +83,11 @@ public class AuthFragment extends Fragment {
     private void initViews(View v) {
         apiService = RetrofitClient.getApiService();
         prefManager = SharedPrefManager.getInstance(requireContext());
-        mAuth = FirebaseAuth.getInstance();
+        try {
+            mAuth = FirebaseAuth.getInstance();
+        } catch (Exception e) {
+            mAuth = null;
+        }
 
         layoutAuthForm = v.findViewById(R.id.layoutAuthForm);
         layoutProfile = v.findViewById(R.id.layoutProfile);
@@ -129,7 +133,9 @@ public class AuthFragment extends Fragment {
 
         btnLogout.setOnClickListener(v -> {
             prefManager.clear();
-            mAuth.signOut();
+            if (mAuth != null) {
+                mAuth.signOut();
+            }
             checkLoginState();
             Toast.makeText(requireContext(), "Đã đăng xuất!", Toast.LENGTH_SHORT).show();
         });
@@ -255,6 +261,11 @@ public class AuthFragment extends Fragment {
     }
 
     private void handleFirebaseLogin() {
+        if (mAuth == null) {
+            Toast.makeText(requireContext(), "Firebase chưa được khởi tạo (thiếu google-services.json)!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         FirebaseUser currentUser = mAuth.getCurrentUser();
         if (currentUser == null) {
             Toast.makeText(requireContext(), "Chưa có session Firebase!", Toast.LENGTH_SHORT).show();
