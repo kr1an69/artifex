@@ -51,4 +51,12 @@ public class AuthDTO {
     public static class UpdateAvatarRequest {
         private String avatarUrl;
     }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ChangePasswordRequest {
+        private String oldPassword;
+        private String newPassword;
+    }
 }
