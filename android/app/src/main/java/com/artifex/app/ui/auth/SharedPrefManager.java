@@ -18,6 +18,8 @@ public class SharedPrefManager {
     private static final String KEY_EMAIL = "key_email";
     private static final String KEY_FULL_NAME = "key_full_name";
     private static final String KEY_PHONE = "key_phone";
+    private static final String KEY_DOB = "key_dob";
+    private static final String KEY_GENDER = "key_gender";
     private static final String KEY_ADDRESS = "key_address";
     private static final String KEY_AVATAR_URL = "key_avatar_url";
     private static final String KEY_IS_LOGGED_IN = "key_is_logged_in";
@@ -82,6 +84,14 @@ public class SharedPrefManager {
         return ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).getString(KEY_PHONE, "");
     }
 
+    public String getDob() {
+        return ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).getString(KEY_DOB, "");
+    }
+
+    public String getGender() {
+        return ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).getString(KEY_GENDER, "Nam");
+    }
+
     public String getAddress() {
         return ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).getString(KEY_ADDRESS, "");
     }
@@ -96,12 +106,19 @@ public class SharedPrefManager {
         editor.apply();
     }
 
-    public void updateProfile(String fullName, String phone, String address) {
+    // Cập nhật thông tin cá nhân: Họ tên, Email, Số điện thoại cá nhân, Ngày sinh, Giới tính
+    public void updatePersonalInfo(String fullName, String email, String phone, String dob, String gender) {
         SharedPreferences.Editor editor = ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).edit();
-        editor.putString(KEY_FULL_NAME, fullName);
-        editor.putString(KEY_PHONE, phone);
-        editor.putString(KEY_ADDRESS, address);
+        if (fullName != null) editor.putString(KEY_FULL_NAME, fullName);
+        if (email != null) editor.putString(KEY_EMAIL, email);
+        if (phone != null) editor.putString(KEY_PHONE, phone);
+        if (dob != null) editor.putString(KEY_DOB, dob);
+        if (gender != null) editor.putString(KEY_GENDER, gender);
         editor.apply();
+    }
+
+    public void updatePersonalInfo(String fullName, String phone, String dob) {
+        updatePersonalInfo(fullName, null, phone, dob, null);
     }
 
     // ================= SỔ ĐỊA CHỈ (ADDRESS BOOK) =================
@@ -133,7 +150,10 @@ public class SharedPrefManager {
                 a.setDefault(false);
             }
             newAddress.setDefault(true);
-            updateProfile(newAddress.getReceiverName(), newAddress.getPhone(), newAddress.getAddressLine());
+            // Chỉ cập nhật địa chỉ nhận hàng, TUYỆT ĐỐI KHÔNG sửa họ tên tài khoản ở trên đầu!
+            SharedPreferences.Editor editor = ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).edit();
+            editor.putString(KEY_ADDRESS, newAddress.getAddressLine());
+            editor.apply();
         }
         list.add(0, newAddress);
         saveAddressList(list);
@@ -151,7 +171,10 @@ public class SharedPrefManager {
             }
         }
         if (defaultAddress != null) {
-            updateProfile(defaultAddress.getReceiverName(), defaultAddress.getPhone(), defaultAddress.getAddressLine());
+            // Chỉ cập nhật địa chỉ nhận hàng, TUYỆT ĐỐI KHÔNG sửa họ tên tài khoản ở trên đầu!
+            SharedPreferences.Editor editor = ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).edit();
+            editor.putString(KEY_ADDRESS, defaultAddress.getAddressLine());
+            editor.apply();
         }
         saveAddressList(list);
     }
@@ -170,7 +193,9 @@ public class SharedPrefManager {
         }
         if (removedDefault && !list.isEmpty()) {
             list.get(0).setDefault(true);
-            updateProfile(list.get(0).getReceiverName(), list.get(0).getPhone(), list.get(0).getAddressLine());
+            SharedPreferences.Editor editor = ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).edit();
+            editor.putString(KEY_ADDRESS, list.get(0).getAddressLine());
+            editor.apply();
         }
         saveAddressList(list);
     }

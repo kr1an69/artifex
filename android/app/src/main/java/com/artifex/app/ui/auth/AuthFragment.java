@@ -2,9 +2,11 @@ package com.artifex.app.ui.auth;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.DatePickerDialog;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.util.Patterns;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -15,6 +17,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -36,8 +39,11 @@ import com.google.android.material.textfield.TextInputLayout;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
+import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import retrofit2.Call;
@@ -49,14 +55,21 @@ public class AuthFragment extends Fragment {
     private LinearLayout layoutAuthForm, layoutProfile;
     private TextInputLayout tilFullName, tilEmail, tilConfirmPassword;
     private TextInputEditText etFullName, etUsername, etEmail, etPassword, etConfirmPassword;
-    private Button btnSubmitAuth, btnFirebaseAuth, btnEditProfile;
+    private Button btnSubmitAuth, btnFirebaseAuth;
     private View btnLogout, btnChangePassword, cardShippingInfo;
+    private View btnViewAllOrders, btnOrderPending, btnOrderProcessing, btnOrderShipping, btnOrderCompleted;
     private TextView tvAuthTitle, tvToggleMode;
     private ProgressBar progressBar;
 
     private ImageView ivAvatar;
     private ImageButton btnChangeAvatar;
-    private TextView tvProfileFullName, tvProfileEmail, tvProfilePhone, tvProfileAddress;
+    private ImageView btnEditPersonalInfo;
+    private TextView tvProfileFullName, tvProfileEmail;
+
+    // Ô duy nhất hiển thị địa chỉ giao hàng được chọn
+    private View cardSelectedAddress, layoutEmptyAddress, btnEmptyAddAddress;
+    private View btnAddNewAddressMain;
+    private TextView tvSelectedReceiverName, tvSelectedTag, tvSelectedDefaultBadge, tvSelectedPhone, tvSelectedAddressLine;
 
     private boolean isRegisterMode = false;
     private ApiService apiService;
@@ -110,10 +123,15 @@ public class AuthFragment extends Fragment {
 
         btnSubmitAuth = v.findViewById(R.id.btnSubmitAuth);
         btnFirebaseAuth = v.findViewById(R.id.btnFirebaseAuth);
-        btnEditProfile = v.findViewById(R.id.btnEditProfile);
         btnChangePassword = v.findViewById(R.id.btnChangePassword);
         btnLogout = v.findViewById(R.id.btnLogout);
         cardShippingInfo = v.findViewById(R.id.cardShippingInfo);
+
+        btnViewAllOrders = v.findViewById(R.id.btnViewAllOrders);
+        btnOrderPending = v.findViewById(R.id.btnOrderPending);
+        btnOrderProcessing = v.findViewById(R.id.btnOrderProcessing);
+        btnOrderShipping = v.findViewById(R.id.btnOrderShipping);
+        btnOrderCompleted = v.findViewById(R.id.btnOrderCompleted);
 
         tvAuthTitle = v.findViewById(R.id.tvAuthTitle);
         tvToggleMode = v.findViewById(R.id.tvToggleMode);
@@ -121,10 +139,21 @@ public class AuthFragment extends Fragment {
 
         ivAvatar = v.findViewById(R.id.ivAvatar);
         btnChangeAvatar = v.findViewById(R.id.btnChangeAvatar);
+        btnEditPersonalInfo = v.findViewById(R.id.btnEditPersonalInfo);
         tvProfileFullName = v.findViewById(R.id.tvProfileFullName);
         tvProfileEmail = v.findViewById(R.id.tvProfileEmail);
-        tvProfilePhone = v.findViewById(R.id.tvProfilePhone);
-        tvProfileAddress = v.findViewById(R.id.tvProfileAddress);
+
+        // Ô duy nhất hiển thị địa chỉ giao hàng
+        btnAddNewAddressMain = v.findViewById(R.id.btnAddNewAddressMain);
+        cardSelectedAddress = v.findViewById(R.id.cardSelectedAddress);
+        layoutEmptyAddress = v.findViewById(R.id.layoutEmptyAddress);
+        btnEmptyAddAddress = v.findViewById(R.id.btnEmptyAddAddress);
+
+        tvSelectedReceiverName = v.findViewById(R.id.tvSelectedReceiverName);
+        tvSelectedTag = v.findViewById(R.id.tvSelectedTag);
+        tvSelectedDefaultBadge = v.findViewById(R.id.tvSelectedDefaultBadge);
+        tvSelectedPhone = v.findViewById(R.id.tvSelectedPhone);
+        tvSelectedAddressLine = v.findViewById(R.id.tvSelectedAddressLine);
     }
 
     private void setupEvents() {
@@ -146,13 +175,31 @@ public class AuthFragment extends Fragment {
             imagePickerLauncher.launch(intent);
         });
 
-        // Bấm nút "Sổ địa chỉ" hoặc chạm vào thẻ Giao hàng đều mở Sổ địa chỉ
-        btnEditProfile.setOnClickListener(v -> showAddressBookBottomSheet());
-        if (cardShippingInfo != null) {
-            cardShippingInfo.setOnClickListener(v -> showAddressBookBottomSheet());
+        // Bấm nút sửa thông tin cá nhân ở trên đầu
+        if (btnEditPersonalInfo != null) {
+            btnEditPersonalInfo.setOnClickListener(v -> showEditPersonalInfoDialog());
         }
 
+        // Chạm vào ô địa chỉ duy nhất để mở danh sách các địa chỉ đã lưu và chọn địa chỉ khác
+        if (cardSelectedAddress != null) {
+            cardSelectedAddress.setOnClickListener(v -> showAddressBookBottomSheet());
+        }
+
+        // Bấm nút + Thêm địa chỉ (ở cả header lẫn khi chưa có địa chỉ nào)
+        View.OnClickListener addAddressClick = v -> showAddAddressDialog();
+        if (btnAddNewAddressMain != null) btnAddNewAddressMain.setOnClickListener(addAddressClick);
+        if (btnEmptyAddAddress != null) btnEmptyAddAddress.setOnClickListener(addAddressClick);
+
         btnChangePassword.setOnClickListener(v -> showChangePasswordDialog());
+
+        View.OnClickListener orderDevClickListener = v ->
+                Toast.makeText(requireContext(), "Tính năng Đơn mua đang được phát triển!", Toast.LENGTH_SHORT).show();
+
+        if (btnViewAllOrders != null) btnViewAllOrders.setOnClickListener(orderDevClickListener);
+        if (btnOrderPending != null) btnOrderPending.setOnClickListener(orderDevClickListener);
+        if (btnOrderProcessing != null) btnOrderProcessing.setOnClickListener(orderDevClickListener);
+        if (btnOrderShipping != null) btnOrderShipping.setOnClickListener(orderDevClickListener);
+        if (btnOrderCompleted != null) btnOrderCompleted.setOnClickListener(orderDevClickListener);
 
         btnLogout.setOnClickListener(v -> {
             prefManager.clear();
@@ -198,11 +245,42 @@ public class AuthFragment extends Fragment {
         }
     }
 
+    private void refreshAddressList() {
+        List<UserAddress> currentList = prefManager.getAddressList();
+
+        if (currentList == null || currentList.isEmpty()) {
+            if (layoutEmptyAddress != null) layoutEmptyAddress.setVisibility(View.VISIBLE);
+            if (cardSelectedAddress != null) cardSelectedAddress.setVisibility(View.GONE);
+            return;
+        }
+
+        if (layoutEmptyAddress != null) layoutEmptyAddress.setVisibility(View.GONE);
+        if (cardSelectedAddress != null) cardSelectedAddress.setVisibility(View.VISIBLE);
+
+        // Hiển thị 1 ô duy nhất: Địa chỉ được chọn (mặc định)
+        UserAddress selectedAddr = currentList.get(0);
+        for (UserAddress a : currentList) {
+            if (a.isDefault()) {
+                selectedAddr = a;
+                break;
+            }
+        }
+
+        if (tvSelectedReceiverName != null) tvSelectedReceiverName.setText(selectedAddr.getReceiverName());
+        if (tvSelectedTag != null) tvSelectedTag.setText(selectedAddr.getTag());
+        if (tvSelectedPhone != null) tvSelectedPhone.setText(selectedAddr.getPhone());
+        if (tvSelectedAddressLine != null) tvSelectedAddressLine.setText(selectedAddr.getAddressLine());
+        if (tvSelectedDefaultBadge != null) {
+            tvSelectedDefaultBadge.setVisibility(selectedAddr.isDefault() ? View.VISIBLE : View.GONE);
+        }
+    }
+
     private void bindProfileData() {
         tvProfileFullName.setText(prefManager.getFullName());
         tvProfileEmail.setText(prefManager.getEmail());
-        tvProfilePhone.setText(!prefManager.getPhone().isEmpty() ? prefManager.getPhone() : "Chưa cập nhật số điện thoại");
-        tvProfileAddress.setText(!prefManager.getAddress().isEmpty() ? prefManager.getAddress() : "Chưa cập nhật địa chỉ nhận hàng");
+
+        // Cập nhật danh sách địa chỉ giao hàng hiển thị trực tiếp
+        refreshAddressList();
 
         String avatarUrl = prefManager.getAvatarUrl();
         if (avatarUrl != null && !avatarUrl.isEmpty()) {
@@ -211,6 +289,144 @@ public class AuthFragment extends Fragment {
                     .circleCrop()
                     .into(ivAvatar);
         }
+    }
+
+    // ================= CHỈNH SỬA THÔNG TIN CÁ NHÂN (HỌ TÊN, EMAIL, SĐT CÁ NHÂN, NGÀY SINH, GIỚI TÍNH) =================
+    private void showEditPersonalInfoDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+        View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_edit_personal_info, null);
+        builder.setView(dialogView);
+
+        AlertDialog dialog = builder.create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        }
+
+        TextInputEditText etEditFullName = dialogView.findViewById(R.id.etEditFullName);
+        TextInputEditText etEditEmail = dialogView.findViewById(R.id.etEditEmail);
+        TextInputEditText etEditPhone = dialogView.findViewById(R.id.etEditPersonalPhone);
+        TextInputEditText etEditDob = dialogView.findViewById(R.id.etEditDob);
+        RadioGroup rgGender = dialogView.findViewById(R.id.rgGender);
+        RadioButton rbGenderMale = dialogView.findViewById(R.id.rbGenderMale);
+        RadioButton rbGenderFemale = dialogView.findViewById(R.id.rbGenderFemale);
+        RadioButton rbGenderOther = dialogView.findViewById(R.id.rbGenderOther);
+        Button btnCancel = dialogView.findViewById(R.id.btnCancelEditPersonal);
+        Button btnSave = dialogView.findViewById(R.id.btnSaveEditPersonal);
+
+        etEditFullName.setText(prefManager.getFullName());
+        etEditEmail.setText(prefManager.getEmail());
+        etEditPhone.setText(prefManager.getPhone());
+        etEditDob.setText(prefManager.getDob());
+
+        String currentGender = prefManager.getGender();
+        if ("Nữ".equalsIgnoreCase(currentGender)) {
+            rbGenderFemale.setChecked(true);
+        } else if ("Khác".equalsIgnoreCase(currentGender)) {
+            rbGenderOther.setChecked(true);
+        } else {
+            rbGenderMale.setChecked(true);
+        }
+
+        // Bấm vào ô ngày sinh sẽ mở DatePickerDialog chuẩn
+        View.OnClickListener datePickerListener = v -> {
+            Calendar calendar = Calendar.getInstance();
+            int year = calendar.get(Calendar.YEAR) - 20;
+            int month = calendar.get(Calendar.MONTH);
+            int day = calendar.get(Calendar.DAY_OF_MONTH);
+
+            String currentDob = etEditDob.getText() != null ? etEditDob.getText().toString().trim() : "";
+            if (!currentDob.isEmpty() && currentDob.contains("/")) {
+                String[] parts = currentDob.split("/");
+                if (parts.length == 3) {
+                    try {
+                        day = Integer.parseInt(parts[0]);
+                        month = Integer.parseInt(parts[1]) - 1;
+                        year = Integer.parseInt(parts[2]);
+                    } catch (Exception ignored) {}
+                }
+            }
+
+            DatePickerDialog datePickerDialog = new DatePickerDialog(
+                    requireContext(),
+                    (view, selectedYear, selectedMonth, selectedDay) -> {
+                        String formatted = String.format(Locale.getDefault(), "%02d/%02d/%04d", selectedDay, selectedMonth + 1, selectedYear);
+                        etEditDob.setText(formatted);
+                    },
+                    year, month, day
+            );
+            datePickerDialog.show();
+        };
+
+        etEditDob.setOnClickListener(datePickerListener);
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+
+        btnSave.setOnClickListener(v -> {
+            String newFullName = etEditFullName.getText() != null ? etEditFullName.getText().toString().trim() : "";
+            String newEmail = etEditEmail.getText() != null ? etEditEmail.getText().toString().trim() : "";
+            String newPhone = etEditPhone.getText() != null ? etEditPhone.getText().toString().trim() : "";
+            String newDob = etEditDob.getText() != null ? etEditDob.getText().toString().trim() : "";
+
+            String selectedGender = "Nam";
+            int checkedId = rgGender.getCheckedRadioButtonId();
+            if (checkedId == R.id.rbGenderFemale) {
+                selectedGender = "Nữ";
+            } else if (checkedId == R.id.rbGenderOther) {
+                selectedGender = "Khác";
+            }
+
+            if (newFullName.isEmpty()) {
+                Toast.makeText(requireContext(), "Vui lòng nhập họ và tên!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (newEmail.isEmpty() || !Patterns.EMAIL_ADDRESS.matcher(newEmail).matches()) {
+                Toast.makeText(requireContext(), "Địa chỉ email không hợp lệ!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            progressBar.setVisibility(View.VISIBLE);
+            btnSave.setEnabled(false);
+
+            // Đồng bộ lên MySQL backend
+            Map<String, Object> body = new HashMap<>();
+            body.put("fullName", newFullName);
+            body.put("email", newEmail);
+            body.put("phone", newPhone);
+            body.put("dateOfBirth", newDob);
+            body.put("gender", selectedGender);
+
+            final String finalGender = selectedGender;
+            apiService.updateProfile(prefManager.getUserId(), body).enqueue(new Callback<Map<String, Object>>() {
+                @Override
+                public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                    progressBar.setVisibility(View.GONE);
+                    btnSave.setEnabled(true);
+
+                    if (response.isSuccessful()) {
+                        prefManager.updatePersonalInfo(newFullName, newEmail, newPhone, newDob, finalGender);
+                        bindProfileData();
+                        dialog.dismiss();
+                        Toast.makeText(requireContext(), "Cập nhật thông tin cá nhân thành công!", Toast.LENGTH_SHORT).show();
+                    } else {
+                        String errorMsg = "Cập nhật thất bại!";
+                        if (response.code() == 400) {
+                            errorMsg = "Email đã được sử dụng bởi tài khoản khác!";
+                        }
+                        Toast.makeText(requireContext(), errorMsg, Toast.LENGTH_SHORT).show();
+                    }
+                }
+
+                @Override
+                public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                    progressBar.setVisibility(View.GONE);
+                    btnSave.setEnabled(true);
+                    Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            });
+        });
+
+        dialog.show();
     }
 
     private void handleLogin() {
@@ -400,10 +616,8 @@ public class AuthFragment extends Fragment {
                 prefManager.setDefaultAddress(address.getId());
                 bindProfileData();
 
-                // Đồng bộ địa chỉ mới chọn lên Backend MySQL
+                // Chỉ đồng bộ địa chỉ nhận hàng lên Backend, TUYỆT ĐỐI KHÔNG ĐỔI TÊN TÀI KHOẢN TRÊN ĐẦU!
                 Map<String, Object> body = new HashMap<>();
-                body.put("fullName", address.getReceiverName());
-                body.put("phone", address.getPhone());
                 body.put("address", address.getAddressLine());
                 apiService.updateProfile(prefManager.getUserId(), body).enqueue(new Callback<Map<String, Object>>() {
                     @Override
@@ -432,6 +646,10 @@ public class AuthFragment extends Fragment {
         btnAddNew.setOnClickListener(v -> showAddAddressDialog(bottomSheet, adapterHolder[0], addressList));
 
         bottomSheet.show();
+    }
+
+    private void showAddAddressDialog() {
+        showAddAddressDialog(null, null, null);
     }
 
     private void showAddAddressDialog(BottomSheetDialog parentSheet, AddressAdapter adapter, List<UserAddress> addressList) {
@@ -472,15 +690,18 @@ public class AuthFragment extends Fragment {
             UserAddress newAddr = new UserAddress(name, phone, address, tag, isDefault);
             prefManager.addAddress(newAddr);
 
-            addressList.clear();
-            addressList.addAll(prefManager.getAddressList());
-            adapter.notifyDataSetChanged();
-            bindProfileData();
+            if (addressList != null) {
+                addressList.clear();
+                addressList.addAll(prefManager.getAddressList());
+            }
+            if (adapter != null) {
+                adapter.notifyDataSetChanged();
+            }
+            refreshAddressList();
 
             if (isDefault) {
+                // Chỉ đồng bộ địa chỉ nhận hàng lên Backend, TUYỆT ĐỐI KHÔNG ĐỔI TÊN TÀI KHOẢN TRÊN ĐẦU!
                 Map<String, Object> body = new HashMap<>();
-                body.put("fullName", name);
-                body.put("phone", phone);
                 body.put("address", address);
                 apiService.updateProfile(prefManager.getUserId(), body).enqueue(new Callback<Map<String, Object>>() {
                     @Override
@@ -579,7 +800,10 @@ public class AuthFragment extends Fragment {
         String phone = (String) user.get("phone");
         String address = (String) user.get("address");
         String avatarUrl = (String) user.get("avatarUrl");
+        String dob = (String) user.get("dateOfBirth");
+        String gender = (String) user.get("gender");
 
         prefManager.saveUser(id, username, email, fullName, phone, address, avatarUrl);
+        prefManager.updatePersonalInfo(fullName, email, phone, dob, gender != null ? gender : "Nam");
     }
 }

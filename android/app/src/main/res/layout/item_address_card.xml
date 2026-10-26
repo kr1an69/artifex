@@ -26,10 +26,17 @@
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:src="@drawable/ic_nav_auth"
+                app:tint="@color/artifex_primary" />
+
             <TextView
                 android:id="@+id/tvItemReceiverName"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
                 android:layout_weight="1"
                 android:text="Nguyễn Văn A"
                 android:textColor="@color/artifex_text_primary"
@@ -77,24 +84,60 @@
                 app:tint="@color/artifex_text_muted" />
         </LinearLayout>
 
-        <!-- Hàng 2: Số điện thoại -->
-        <TextView
-            android:id="@+id/tvItemPhone"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="0901 234 567"
-            android:textColor="@color/artifex_text_secondary"
-            android:textSize="13sp" />
+        <!-- Đường phân cách nhẹ giữa thông tin tên và liên lạc -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="10dp"
+            android:background="@color/artifex_border" />
 
-        <!-- Hàng 3: Địa chỉ chi tiết -->
-        <TextView
-            android:id="@+id/tvItemAddressLine"
+        <!-- Hàng 2: Icon Phone + Số điện thoại -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="Khu phố 6, P. Linh Trung, TP. Thủ Đức, TP.HCM"
-            android:textColor="@color/artifex_text_primary"
-            android:textSize="14sp" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="15dp"
+                android:layout_height="15dp"
+                android:src="@drawable/ic_phone"
+                app:tint="@color/artifex_primary" />
+
+            <TextView
+                android:id="@+id/tvItemPhone"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="0901 234 567"
+                android:textColor="@color/artifex_text_secondary"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <!-- Hàng 3: Icon Location + Địa chỉ chi tiết -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="top"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="15dp"
+                android:layout_height="15dp"
+                android:layout_marginTop="2dp"
+                android:src="@drawable/ic_location"
+                app:tint="@color/artifex_primary" />
+
+            <TextView
+                android:id="@+id/tvItemAddressLine"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="Khu phố 6, P. Linh Trung, TP. Thủ Đức, TP.HCM"
+                android:textColor="@color/artifex_text_primary"
+                android:textSize="14sp" />
+        </LinearLayout>
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

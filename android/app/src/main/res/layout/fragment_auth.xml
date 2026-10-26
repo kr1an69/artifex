@@ -241,14 +241,34 @@
                             app:tint="@color/artifex_on_primary" />
                     </FrameLayout>
 
-                    <TextView
-                        android:id="@+id/tvProfileFullName"
+                                        <!-- Hàng Họ tên kèm nút Sửa thông tin cá nhân -->
+                    <LinearLayout
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
-                        android:textColor="@color/artifex_text_primary"
-                        android:textSize="18sp"
-                        android:textStyle="bold" />
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/tvProfileFullName"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textColor="@color/artifex_text_primary"
+                            android:textSize="18sp"
+                            android:textStyle="bold" />
+
+                        <ImageView
+                            android:id="@+id/btnEditPersonalInfo"
+                            android:layout_width="32dp"
+                            android:layout_height="32dp"
+                            android:layout_marginStart="8dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:padding="6dp"
+                            android:src="@drawable/ic_edit"
+                            app:tint="@color/artifex_primary" />
+                    </LinearLayout>
 
                     <TextView
                         android:id="@+id/tvProfileEmail"
@@ -260,14 +280,192 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Card 2: Thông tin giao hàng dạng Icon List Item -->
+            
+            <!-- Card: Đơn mua của tôi -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardMyOrders"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                app:cardBackgroundColor="@color/artifex_surface"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp"
+                app:strokeColor="@color/artifex_border"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <!-- Header: Tiêu đề & Xem tất cả -->
+                    <LinearLayout
+                        android:id="@+id/btnViewAllOrders"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?attr/selectableItemBackground"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Đơn mua của tôi"
+                            android:textColor="@color/artifex_text_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Xem lịch sử"
+                            android:textColor="@color/artifex_text_secondary"
+                            android:textSize="13sp" />
+
+                        <ImageView
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:layout_marginStart="4dp"
+                            android:src="@drawable/ic_chevron_right"
+                            app:tint="@color/artifex_text_muted" />
+                    </LinearLayout>
+
+                    <!-- Đường phân cách -->
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginTop="12dp"
+                        android:layout_marginBottom="14dp"
+                        android:background="@color/artifex_border" />
+
+                    <!-- 4 Icon trạng thái đơn hàng -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <!-- 1. Chờ xác nhận -->
+                        <LinearLayout
+                            android:id="@+id/btnOrderPending"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:background="?attr/selectableItemBackground"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:gravity="center"
+                            android:orientation="vertical">
+
+                            <ImageView
+                                android:layout_width="26dp"
+                                android:layout_height="26dp"
+                                android:src="@drawable/ic_order_pending"
+                                app:tint="@color/artifex_primary" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="6dp"
+                                android:text="Chờ xác nhận"
+                                android:textColor="@color/artifex_text_secondary"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <!-- 2. Chờ lấy hàng -->
+                        <LinearLayout
+                            android:id="@+id/btnOrderProcessing"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:background="?attr/selectableItemBackground"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:gravity="center"
+                            android:orientation="vertical">
+
+                            <ImageView
+                                android:layout_width="26dp"
+                                android:layout_height="26dp"
+                                android:src="@drawable/ic_order_processing"
+                                app:tint="@color/artifex_primary" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="6dp"
+                                android:text="Chờ lấy hàng"
+                                android:textColor="@color/artifex_text_secondary"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <!-- 3. Đang giao -->
+                        <LinearLayout
+                            android:id="@+id/btnOrderShipping"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:background="?attr/selectableItemBackground"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:gravity="center"
+                            android:orientation="vertical">
+
+                            <ImageView
+                                android:layout_width="26dp"
+                                android:layout_height="26dp"
+                                android:src="@drawable/ic_order_shipping"
+                                app:tint="@color/artifex_primary" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="6dp"
+                                android:text="Đang giao"
+                                android:textColor="@color/artifex_text_secondary"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <!-- 4. Đánh giá -->
+                        <LinearLayout
+                            android:id="@+id/btnOrderCompleted"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:background="?attr/selectableItemBackground"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:gravity="center"
+                            android:orientation="vertical">
+
+                            <ImageView
+                                android:layout_width="26dp"
+                                android:layout_height="26dp"
+                                android:src="@drawable/ic_order_completed"
+                                app:tint="@color/artifex_primary" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="6dp"
+                                android:text="Đánh giá"
+                                android:textColor="@color/artifex_text_secondary"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Card 2: Thông tin giao hàng (Chỉ hiển thị 1 ô duy nhất) -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/cardShippingInfo"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:clickable="true"
-                android:focusable="true"
                 app:cardBackgroundColor="@color/artifex_surface"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
@@ -280,16 +478,23 @@
                     android:orientation="vertical"
                     android:padding="20dp">
 
-                    <!-- Hàng tiêu đề kèm nút Chỉnh sửa / Sổ địa chỉ -->
+                    <!-- Hàng tiêu đề kèm nút + Thêm địa chỉ -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:gravity="center_vertical"
                         android:orientation="horizontal">
 
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:src="@drawable/ic_order_shipping"
+                            app:tint="@color/artifex_primary" />
+
                         <TextView
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
                             android:layout_weight="1"
                             android:text="Thông tin giao hàng"
                             android:textColor="@color/artifex_text_primary"
@@ -297,70 +502,204 @@
                             android:textStyle="bold" />
 
                         <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnEditProfile"
+                            android:id="@+id/btnAddNewAddressMain"
                             style="@style/Widget.MaterialComponents.Button.TextButton"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Sổ địa chỉ"
+                            android:text="+ Thêm địa chỉ"
                             android:textColor="@color/artifex_primary"
                             android:textSize="13sp"
+                            android:textStyle="bold"
                             app:icon="@drawable/ic_location"
                             app:iconTint="@color/artifex_primary" />
                     </LinearLayout>
 
-                    <!-- Hàng Số điện thoại có icon -->
-                    <LinearLayout
+                    <!-- 1 Ô DUY NHẤT hiển thị địa chỉ được chọn (Chạm vào để đổi địa chỉ khác) -->
+                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/cardSelectedAddress"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
+                        android:clickable="true"
+                        android:focusable="true"
+                        app:cardBackgroundColor="@color/artifex_surface"
+                        app:cardCornerRadius="14dp"
+                        app:cardElevation="0dp"
+                        app:strokeColor="@color/artifex_primary"
+                        app:strokeWidth="1.5dp">
 
-                        <ImageView
-                            android:layout_width="20dp"
-                            android:layout_height="20dp"
-                            android:src="@drawable/ic_phone"
-                            app:tint="@color/artifex_primary" />
-
-                        <TextView
-                            android:id="@+id/tvProfilePhone"
+                        <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginStart="12dp"
-                            android:text="Chưa cập nhật số điện thoại"
-                            android:textColor="@color/artifex_text_primary"
-                            android:textSize="14sp" />
-                    </LinearLayout>
+                            android:orientation="vertical"
+                            android:padding="16dp">
 
-                    <!-- Đường phân cách -->
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:layout_marginTop="12dp"
-                        android:layout_marginBottom="12dp"
-                        android:background="@color/artifex_border" />
+                            <!-- Hàng 1: Icon Người nhận + Tên người nhận + Nhãn + Badge MẶC ĐỊNH + Mũi tên -->
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
 
-                    <!-- Hàng Địa chỉ có icon -->
+                                <ImageView
+                                    android:layout_width="18dp"
+                                    android:layout_height="18dp"
+                                    android:src="@drawable/ic_nav_auth"
+                                    app:tint="@color/artifex_primary" />
+
+                                <TextView
+                                    android:id="@+id/tvSelectedReceiverName"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="8dp"
+                                    android:layout_weight="1"
+                                    android:textColor="@color/artifex_text_primary"
+                                    android:textSize="15sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:id="@+id/tvSelectedTag"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:background="@color/artifex_surface_variant"
+                                    android:paddingStart="8dp"
+                                    android:paddingTop="3dp"
+                                    android:paddingEnd="8dp"
+                                    android:paddingBottom="3dp"
+                                    android:text="🏠 Nhà riêng"
+                                    android:textColor="@color/artifex_text_secondary"
+                                    android:textSize="11sp" />
+
+                                <TextView
+                                    android:id="@+id/tvSelectedDefaultBadge"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="6dp"
+                                    android:background="@color/artifex_primary"
+                                    android:paddingStart="8dp"
+                                    android:paddingTop="3dp"
+                                    android:paddingEnd="8dp"
+                                    android:paddingBottom="3dp"
+                                    android:text="MẶC ĐỊNH"
+                                    android:textColor="@color/artifex_on_primary"
+                                    android:textSize="10sp"
+                                    android:textStyle="bold" />
+
+                                <ImageView
+                                    android:layout_width="18dp"
+                                    android:layout_height="18dp"
+                                    android:layout_marginStart="6dp"
+                                    android:src="@drawable/ic_chevron_right"
+                                    app:tint="@color/artifex_primary" />
+                            </LinearLayout>
+
+                            <!-- Đường phân cách nhẹ giữa thông tin tên và liên lạc -->
+                            <View
+                                android:layout_width="match_parent"
+                                android:layout_height="1dp"
+                                android:layout_marginTop="10dp"
+                                android:layout_marginBottom="10dp"
+                                android:background="@color/artifex_border" />
+
+                            <!-- Hàng 2: Icon Phone + Số điện thoại người nhận -->
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <ImageView
+                                    android:layout_width="16dp"
+                                    android:layout_height="16dp"
+                                    android:src="@drawable/ic_phone"
+                                    app:tint="@color/artifex_primary" />
+
+                                <TextView
+                                    android:id="@+id/tvSelectedPhone"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="8dp"
+                                    android:textColor="@color/artifex_text_secondary"
+                                    android:textSize="13sp" />
+                            </LinearLayout>
+
+                            <!-- Hàng 3: Icon Location + Địa chỉ chi tiết -->
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="8dp"
+                                android:gravity="top"
+                                android:orientation="horizontal">
+
+                                <ImageView
+                                    android:layout_width="16dp"
+                                    android:layout_height="16dp"
+                                    android:layout_marginTop="2dp"
+                                    android:src="@drawable/ic_location"
+                                    app:tint="@color/artifex_primary" />
+
+                                <TextView
+                                    android:id="@+id/tvSelectedAddressLine"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="8dp"
+                                    android:textColor="@color/artifex_text_primary"
+                                    android:textSize="14sp" />
+                            </LinearLayout>
+
+                            <!-- Hàng 4: Icon Edit + Dòng gợi ý chạm để đổi sang địa chỉ khác -->
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="12dp"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <ImageView
+                                    android:layout_width="14dp"
+                                    android:layout_height="14dp"
+                                    android:src="@drawable/ic_edit"
+                                    app:tint="@color/artifex_primary" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="6dp"
+                                    android:text="Chạm để chọn hoặc đổi sang địa chỉ khác"
+                                    android:textColor="@color/artifex_primary"
+                                    android:textSize="12sp"
+                                    android:textStyle="italic" />
+                            </LinearLayout>
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <!-- View khi chưa có địa chỉ nào -->
                     <LinearLayout
+                        android:id="@+id/layoutEmptyAddress"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <ImageView
-                            android:layout_width="20dp"
-                            android:layout_height="20dp"
-                            android:src="@drawable/ic_location"
-                            app:tint="@color/artifex_primary" />
+                        android:layout_marginTop="12dp"
+                        android:gravity="center"
+                        android:orientation="vertical"
+                        android:padding="16dp"
+                        android:visibility="gone">
 
                         <TextView
-                            android:id="@+id/tvProfileAddress"
-                            android:layout_width="match_parent"
+                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginStart="12dp"
-                            android:text="Chưa cập nhật địa chỉ nhận hàng"
-                            android:textColor="@color/artifex_text_primary"
+                            android:text="Chưa có địa chỉ nhận hàng"
+                            android:textColor="@color/artifex_text_secondary"
                             android:textSize="14sp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnEmptyAddAddress"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="+ Thêm địa chỉ mới"
+                            android:textColor="@color/artifex_on_primary"
+                            app:backgroundTint="@color/artifex_primary"
+                            app:cornerRadius="10dp" />
                     </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>

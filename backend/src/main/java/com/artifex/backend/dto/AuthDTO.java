@@ -41,8 +41,11 @@ public class AuthDTO {
     @AllArgsConstructor
     public static class UpdateProfileRequest {
         private String fullName;
+        private String email;
         private String phone;
         private String address;
+        private String dateOfBirth;
+        private String gender;
     }
 
     @Data
