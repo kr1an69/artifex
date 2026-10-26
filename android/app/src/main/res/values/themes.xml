@@ -23,4 +23,9 @@
     </style>
 
     <style name="Theme.Artifex" parent="Base.Theme.Artifex" />
+
+    <!-- Circular Shape for Avatar and Round Buttons -->
+    <style name="ShapeAppearance.Artifex.Circle" parent="">
+        <item name="cornerSize">50%</item>
+    </style>
 </resources>

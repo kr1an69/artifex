@@ -10,8 +10,7 @@ public interface ApiService {
     @GET("api/health")
     Call<ResponseBody> checkHealth();
 
-    // Các thành viên trong nhóm sẽ khai báo thêm các API methods của mình tại đây
-        // ==================== AUTH & USER APIS (Khoa) ====================
+    // ==================== AUTH & USER APIS (Khoa) ====================
     @retrofit2.http.POST("api/auth/register")
     retrofit2.Call<java.util.Map<String, Object>> register(@retrofit2.http.Body java.util.Map<String, Object> body);
 
@@ -29,6 +28,7 @@ public interface ApiService {
 
     @retrofit2.http.PUT("api/users/{id}/avatar")
     retrofit2.Call<java.util.Map<String, Object>> updateAvatar(@retrofit2.http.Path("id") Long id, @retrofit2.http.Body java.util.Map<String, Object> body);
+
+    @retrofit2.http.PUT("api/users/{id}/password")
+    retrofit2.Call<java.util.Map<String, Object>> changePassword(@retrofit2.http.Path("id") Long id, @retrofit2.http.Body java.util.Map<String, Object> body);
 }
-
-
