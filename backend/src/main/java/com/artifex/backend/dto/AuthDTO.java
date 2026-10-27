@@ -62,4 +62,13 @@ public class AuthDTO {
         private String oldPassword;
         private String newPassword;
     }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ForgotPasswordRequest {
+        private String usernameOrEmail;
+        private String email;
+        private String newPassword;
+    }
 }

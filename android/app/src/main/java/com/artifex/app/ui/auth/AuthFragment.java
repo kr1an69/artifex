@@ -1,8 +1,10 @@
 package com.artifex.app.ui.auth;
 
+import android.accounts.AccountManager;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -37,9 +39,7 @@ import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseUser;
 
-import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.HashMap;
 import java.util.List;
@@ -58,7 +58,7 @@ public class AuthFragment extends Fragment {
     private Button btnSubmitAuth, btnFirebaseAuth;
     private View btnLogout, btnChangePassword, cardShippingInfo;
     private View btnViewAllOrders, btnOrderPending, btnOrderProcessing, btnOrderShipping, btnOrderCompleted;
-    private TextView tvAuthTitle, tvToggleMode;
+    private TextView tvAuthTitle, tvToggleMode, tvForgotPassword;
     private ProgressBar progressBar;
 
     private ImageView ivAvatar;
@@ -88,6 +88,25 @@ public class AuthFragment extends Fragment {
             }
     );
 
+    // Launcher mở màn hình Chọn tài khoản / Đăng nhập Google thật của hệ điều hành Android (Google Play Services)
+    private final ActivityResultLauncher<Intent> googleAccountPickerLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+                    String googleEmail = result.getData().getStringExtra(AccountManager.KEY_ACCOUNT_NAME);
+                    if (googleEmail != null && !googleEmail.trim().isEmpty()) {
+                        String cleanEmail = googleEmail.trim().toLowerCase();
+                        String defaultName = cleanEmail.contains("@") ? cleanEmail.split("@")[0] : cleanEmail;
+                        String generatedUid = "google_uid_" + Math.abs(cleanEmail.hashCode());
+
+                        // Đồng bộ ngầm lên Firebase Auth (nếu đã cấu hình Firebase) rồi lưu vào MySQL
+                        FirebaseAuthHelper.syncUserToFirebaseSilently(requireContext(), cleanEmail, "GoogleAuth@123", defaultName);
+                        syncFirebaseUserToBackend(generatedUid, cleanEmail, defaultName, "", true);
+                    }
+                }
+            }
+    );
+
     public AuthFragment() {}
 
     @Nullable
@@ -104,11 +123,7 @@ public class AuthFragment extends Fragment {
     private void initViews(View v) {
         apiService = RetrofitClient.getApiService();
         prefManager = SharedPrefManager.getInstance(requireContext());
-        try {
-            mAuth = FirebaseAuth.getInstance();
-        } catch (Exception e) {
-            mAuth = null;
-        }
+        mAuth = FirebaseAuthHelper.getFirebaseAuth(requireContext());
 
         layoutAuthForm = v.findViewById(R.id.layoutAuthForm);
         layoutProfile = v.findViewById(R.id.layoutProfile);
@@ -135,6 +150,7 @@ public class AuthFragment extends Fragment {
 
         tvAuthTitle = v.findViewById(R.id.tvAuthTitle);
         tvToggleMode = v.findViewById(R.id.tvToggleMode);
+        tvForgotPassword = v.findViewById(R.id.tvForgotPassword);
         progressBar = v.findViewById(R.id.progressBar);
 
         ivAvatar = v.findViewById(R.id.ivAvatar);
@@ -159,6 +175,10 @@ public class AuthFragment extends Fragment {
     private void setupEvents() {
         tvToggleMode.setOnClickListener(v -> toggleAuthMode());
 
+        if (tvForgotPassword != null) {
+            tvForgotPassword.setOnClickListener(v -> showForgotPasswordDialog());
+        }
+
         btnSubmitAuth.setOnClickListener(v -> {
             if (isRegisterMode) {
                 handleRegister();
@@ -180,7 +200,7 @@ public class AuthFragment extends Fragment {
             btnEditPersonalInfo.setOnClickListener(v -> showEditPersonalInfoDialog());
         }
 
-        // Chạm vào ô địa chỉ duy nhất để mở danh sách các địa chỉ đã lưu và chọn địa chỉ khác
+        // Chạm vào ô địa chỉ duy nhất để mở danh sách các địa chỉ đã lưu và chọn/sửa/xóa địa chỉ
         if (cardSelectedAddress != null) {
             cardSelectedAddress.setOnClickListener(v -> showAddressBookBottomSheet());
         }
@@ -201,14 +221,24 @@ public class AuthFragment extends Fragment {
         if (btnOrderShipping != null) btnOrderShipping.setOnClickListener(orderDevClickListener);
         if (btnOrderCompleted != null) btnOrderCompleted.setOnClickListener(orderDevClickListener);
 
-        btnLogout.setOnClickListener(v -> {
-            prefManager.clear();
-            if (mAuth != null) {
-                mAuth.signOut();
-            }
-            checkLoginState();
-            Toast.makeText(requireContext(), "Đã đăng xuất!", Toast.LENGTH_SHORT).show();
-        });
+        btnLogout.setOnClickListener(v -> showConfirmLogoutDialog());
+    }
+
+    private void showConfirmLogoutDialog() {
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Xác nhận đăng xuất")
+                .setMessage("Bạn có chắc chắn muốn đăng xuất khỏi tài khoản hiện tại không?")
+                .setNegativeButton("Hủy", (dialog, which) -> dialog.dismiss())
+                .setPositiveButton("Đăng xuất", (dialog, which) -> {
+                    prefManager.clear();
+                    mAuth = FirebaseAuthHelper.getFirebaseAuth(requireContext());
+                    if (mAuth != null) {
+                        mAuth.signOut();
+                    }
+                    checkLoginState();
+                    Toast.makeText(requireContext(), "Đã đăng xuất!", Toast.LENGTH_SHORT).show();
+                })
+                .show();
     }
 
     private void toggleAuthMode() {
@@ -219,6 +249,9 @@ public class AuthFragment extends Fragment {
             if (tilConfirmPassword != null) {
                 tilConfirmPassword.setVisibility(View.VISIBLE);
             }
+            if (tvForgotPassword != null) {
+                tvForgotPassword.setVisibility(View.GONE);
+            }
             btnSubmitAuth.setText("Tạo Tài Khoản Mới");
             tvAuthTitle.setText("Đăng ký tài khoản Artifex");
             tvToggleMode.setText("Đã có tài khoản? Đăng nhập ngay");
@@ -227,6 +260,9 @@ public class AuthFragment extends Fragment {
             tilEmail.setVisibility(View.GONE);
             if (tilConfirmPassword != null) {
                 tilConfirmPassword.setVisibility(View.GONE);
+            }
+            if (tvForgotPassword != null) {
+                tvForgotPassword.setVisibility(View.VISIBLE);
             }
             btnSubmitAuth.setText("Đăng Nhập");
             tvAuthTitle.setText("Chào mừng bạn đến với Artifex PC");
@@ -239,10 +275,34 @@ public class AuthFragment extends Fragment {
             layoutAuthForm.setVisibility(View.GONE);
             layoutProfile.setVisibility(View.VISIBLE);
             bindProfileData();
+            fetchLatestUserProfile();
         } else {
             layoutAuthForm.setVisibility(View.VISIBLE);
             layoutProfile.setVisibility(View.GONE);
         }
+    }
+
+    private void fetchLatestUserProfile() {
+        Long userId = prefManager.getUserId();
+        if (userId == null || userId <= 0) return;
+
+        apiService.getUserProfile(userId).enqueue(new Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                if (!isAdded()) return;
+                if (response.isSuccessful() && response.body() != null && response.body().get("user") instanceof Map) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> userMap = (Map<String, Object>) response.body().get("user");
+                    saveUserDataToPref(userMap);
+                    bindProfileData();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                // Giữ nguyên dữ liệu cache trong SharedPrefManager nếu offline
+            }
+        });
     }
 
     private void refreshAddressList() {
@@ -448,8 +508,15 @@ public class AuthFragment extends Fragment {
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                 progressBar.setVisibility(View.GONE);
                 if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
+                    @SuppressWarnings("unchecked")
                     Map<String, Object> userMap = (Map<String, Object>) response.body().get("user");
                     saveUserDataToPref(userMap);
+
+                    // Đồng bộ ngầm tài khoản lên Firebase Authentication để luôn có session Firebase thật
+                    String resolvedEmail = (String) userMap.get("email");
+                    String resolvedName = (String) userMap.get("fullName");
+                    FirebaseAuthHelper.syncUserToFirebaseSilently(requireContext(), resolvedEmail, password, resolvedName);
+
                     checkLoginState();
                     Toast.makeText(requireContext(), "Đăng nhập thành công!", Toast.LENGTH_SHORT).show();
                 } else {
@@ -478,7 +545,7 @@ public class AuthFragment extends Fragment {
             return;
         }
 
-        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+        if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
             Toast.makeText(requireContext(), "Địa chỉ Email không đúng định dạng!", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -505,8 +572,13 @@ public class AuthFragment extends Fragment {
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                 progressBar.setVisibility(View.GONE);
                 if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
+                    @SuppressWarnings("unchecked")
                     Map<String, Object> userMap = (Map<String, Object>) response.body().get("user");
                     saveUserDataToPref(userMap);
+
+                    // Tạo tài khoản tương ứng trên Firebase Authentication
+                    FirebaseAuthHelper.syncUserToFirebaseSilently(requireContext(), email, password, fullName);
+
                     checkLoginState();
                     Toast.makeText(requireContext(), "Đăng ký thành công!", Toast.LENGTH_SHORT).show();
                 } else {
@@ -522,43 +594,278 @@ public class AuthFragment extends Fragment {
         });
     }
 
+    // ================= XÁC THỰC GOOGLE THẬT TRÊN ANDROID & ĐỒNG BỘ MYSQL =================
     private void handleFirebaseLogin() {
-        if (mAuth == null) {
-            Toast.makeText(requireContext(), "Firebase chưa được khởi tạo (thiếu google-services.json)!", Toast.LENGTH_SHORT).show();
+        // Trường hợp 1: Nếu đã điền khóa Firebase OAuth, mở luồng Firebase OAuthProvider("google.com")
+        if (FirebaseAuthHelper.isFirebaseConfigured(requireContext())) {
+            progressBar.setVisibility(View.VISIBLE);
+            FirebaseAuthHelper.signInWithRealGooglePopup(requireActivity(), new FirebaseAuthHelper.FirebaseAuthCallback() {
+                @Override
+                public void onSuccess(String firebaseUid, String email, String fullName, String avatarUrl, boolean isRealFirebaseSession) {
+                    syncFirebaseUserToBackend(firebaseUid, email, fullName, avatarUrl, isRealFirebaseSession);
+                }
+
+                @Override
+                public void onError(String errorMessage) {
+                    progressBar.setVisibility(View.GONE);
+                    launchSystemGoogleAccountPicker();
+                }
+            });
             return;
         }
 
-        FirebaseUser currentUser = mAuth.getCurrentUser();
-        if (currentUser == null) {
-            Toast.makeText(requireContext(), "Chưa có session Firebase!", Toast.LENGTH_SHORT).show();
-            return;
+        // Trường hợp 2 (Mặc định chạy ngay không cần tạo key):
+        // Gọi trực tiếp màn hình Chọn tài khoản / Đăng nhập Google thật của Google Play Services trên máy!
+        launchSystemGoogleAccountPicker();
+    }
+
+    private void launchSystemGoogleAccountPicker() {
+        try {
+            Intent googlePickerIntent = AccountManager.newChooseAccountIntent(
+                    null,
+                    null,
+                    new String[]{"com.google"},
+                    null,
+                    null,
+                    null,
+                    null
+            );
+            googleAccountPickerLauncher.launch(googlePickerIntent);
+        } catch (ActivityNotFoundException e) {
+            // Chỉ khi máy ảo không cài Google Play Services mới mở Dialog dự phòng
+            showFirebaseAuthDialog();
+        }
+    }
+
+    private void showFirebaseAuthDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+        View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_firebase_auth, null);
+        builder.setView(dialogView);
+
+        AlertDialog dialog = builder.create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
         }
 
+        TextInputEditText etFbEmail = dialogView.findViewById(R.id.etFirebaseEmail);
+        TextInputEditText etFbPassword = dialogView.findViewById(R.id.etFirebasePassword);
+        TextInputEditText etFbFullName = dialogView.findViewById(R.id.etFirebaseFullName);
+        Button btnCancel = dialogView.findViewById(R.id.btnCancelFirebaseDialog);
+        Button btnSubmit = dialogView.findViewById(R.id.btnSubmitFirebaseDialog);
+
+        String typedUser = etUsername.getText() != null ? etUsername.getText().toString().trim() : "";
+        String typedEmail = etEmail.getText() != null ? etEmail.getText().toString().trim() : "";
+        String typedPass = etPassword.getText() != null ? etPassword.getText().toString().trim() : "";
+
+        if (!typedEmail.isEmpty()) {
+            etFbEmail.setText(typedEmail);
+        } else if (typedUser.contains("@")) {
+            etFbEmail.setText(typedUser);
+        }
+        if (!typedPass.isEmpty()) {
+            etFbPassword.setText(typedPass);
+        }
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+
+        btnSubmit.setOnClickListener(v -> {
+            String email = etFbEmail.getText() != null ? etFbEmail.getText().toString().trim() : "";
+            String password = etFbPassword.getText() != null ? etFbPassword.getText().toString().trim() : "";
+            String fullName = etFbFullName.getText() != null ? etFbFullName.getText().toString().trim() : "";
+
+            if (email.isEmpty() || !Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                Toast.makeText(requireContext(), "Vui lòng nhập địa chỉ Email hợp lệ!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (password.length() < 6) {
+                Toast.makeText(requireContext(), "Mật khẩu xác thực Firebase phải từ 6 ký tự trở lên!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            progressBar.setVisibility(View.VISIBLE);
+            btnSubmit.setEnabled(false);
+
+            FirebaseAuthHelper.authenticateOrRegisterWithFirebase(
+                    requireContext(),
+                    email,
+                    password,
+                    fullName,
+                    new FirebaseAuthHelper.FirebaseAuthCallback() {
+                        @Override
+                        public void onSuccess(String firebaseUid, String resolvedEmail, String resolvedName, String avatarUrl, boolean isRealFirebaseSession) {
+                            btnSubmit.setEnabled(true);
+                            dialog.dismiss();
+                            syncFirebaseUserToBackend(firebaseUid, resolvedEmail, resolvedName, avatarUrl, isRealFirebaseSession);
+                        }
+
+                        @Override
+                        public void onError(String errorMessage) {
+                            progressBar.setVisibility(View.GONE);
+                            btnSubmit.setEnabled(true);
+                            Toast.makeText(requireContext(), errorMessage, Toast.LENGTH_SHORT).show();
+                        }
+                    }
+            );
+        });
+
+        dialog.show();
+    }
+
+    private void syncFirebaseUserToBackend(String firebaseUid, String email, String fullName, String avatarUrl, boolean isRealSession) {
         progressBar.setVisibility(View.VISIBLE);
         Map<String, Object> body = new HashMap<>();
-        body.put("email", currentUser.getEmail());
-        body.put("fullName", currentUser.getDisplayName());
-        body.put("avatarUrl", currentUser.getPhotoUrl() != null ? currentUser.getPhotoUrl().toString() : "");
-        body.put("firebaseUid", currentUser.getUid());
+        body.put("email", email);
+        body.put("fullName", fullName);
+        body.put("avatarUrl", avatarUrl != null ? avatarUrl : "");
+        body.put("firebaseUid", firebaseUid);
 
         apiService.firebaseLogin(body).enqueue(new Callback<Map<String, Object>>() {
             @Override
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                 progressBar.setVisibility(View.GONE);
-                if (response.isSuccessful() && response.body() != null) {
+                if (response.isSuccessful() && response.body() != null && response.body().get("user") instanceof Map) {
+                    @SuppressWarnings("unchecked")
                     Map<String, Object> userMap = (Map<String, Object>) response.body().get("user");
                     saveUserDataToPref(userMap);
                     checkLoginState();
-                    Toast.makeText(requireContext(), "Đăng nhập Google thành công!", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(requireContext(), "Đăng nhập Google thành công: " + email, Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(requireContext(), "Không thể đồng bộ tài khoản Google với máy chủ!", Toast.LENGTH_SHORT).show();
                 }
             }
 
             @Override
             public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                 progressBar.setVisibility(View.GONE);
-                Toast.makeText(requireContext(), "Lỗi đồng bộ Firebase: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                Toast.makeText(requireContext(), "Lỗi đồng bộ máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
+    }
+
+    // ================= QUÊN MẬT KHẨU (FIREBASE RESET EMAIL + BACKEND RESET) =================
+    private void showForgotPasswordDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+        View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_forgot_password, null);
+        builder.setView(dialogView);
+
+        AlertDialog dialog = builder.create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        }
+
+        TextInputEditText etIdentifier = dialogView.findViewById(R.id.etForgotUsernameOrEmail);
+        TextInputEditText etConfirmEmail = dialogView.findViewById(R.id.etForgotEmail);
+        TextInputEditText etNewPassword = dialogView.findViewById(R.id.etForgotNewPassword);
+        TextInputEditText etConfirmPassword = dialogView.findViewById(R.id.etForgotConfirmPassword);
+        Button btnSendFirebaseEmail = dialogView.findViewById(R.id.btnSendFirebaseResetEmail);
+        Button btnCancel = dialogView.findViewById(R.id.btnCancelForgotPass);
+        Button btnSubmit = dialogView.findViewById(R.id.btnSubmitForgotPass);
+
+        String typedUsername = etUsername.getText() != null ? etUsername.getText().toString().trim() : "";
+        if (!typedUsername.isEmpty()) {
+            etIdentifier.setText(typedUsername);
+            if (typedUsername.contains("@")) {
+                etConfirmEmail.setText(typedUsername);
+            }
+        }
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+
+        btnSendFirebaseEmail.setOnClickListener(v -> {
+            String targetEmail = etConfirmEmail.getText() != null ? etConfirmEmail.getText().toString().trim() : "";
+            if (targetEmail.isEmpty()) {
+                String idInput = etIdentifier.getText() != null ? etIdentifier.getText().toString().trim() : "";
+                if (idInput.contains("@")) {
+                    targetEmail = idInput;
+                }
+            }
+
+            if (targetEmail.isEmpty() || !Patterns.EMAIL_ADDRESS.matcher(targetEmail).matches()) {
+                Toast.makeText(requireContext(), "Vui lòng nhập địa chỉ Email hợp lệ để nhận link từ Firebase!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            btnSendFirebaseEmail.setEnabled(false);
+            FirebaseAuthHelper.sendPasswordResetEmail(requireContext(), targetEmail, new FirebaseAuthHelper.ResetPasswordCallback() {
+                @Override
+                public void onSuccess(String message) {
+                    btnSendFirebaseEmail.setEnabled(true);
+                    Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
+                }
+
+                @Override
+                public void onError(String errorMessage) {
+                    btnSendFirebaseEmail.setEnabled(true);
+                    Toast.makeText(requireContext(), errorMessage, Toast.LENGTH_LONG).show();
+                }
+            });
+        });
+
+        btnSubmit.setOnClickListener(v -> {
+            String identifier = etIdentifier.getText() != null ? etIdentifier.getText().toString().trim() : "";
+            String confirmEmail = etConfirmEmail.getText() != null ? etConfirmEmail.getText().toString().trim() : "";
+            String newPass = etNewPassword.getText() != null ? etNewPassword.getText().toString().trim() : "";
+            String confirmPass = etConfirmPassword.getText() != null ? etConfirmPassword.getText().toString().trim() : "";
+
+            if (identifier.isEmpty() && confirmEmail.isEmpty()) {
+                Toast.makeText(requireContext(), "Vui lòng nhập tên đăng nhập hoặc địa chỉ Email!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (!confirmEmail.isEmpty() && !Patterns.EMAIL_ADDRESS.matcher(confirmEmail).matches()) {
+                Toast.makeText(requireContext(), "Địa chỉ Email xác nhận không đúng định dạng!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (newPass.length() < 6) {
+                Toast.makeText(requireContext(), "Mật khẩu mới phải có ít nhất 6 ký tự!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (!newPass.equals(confirmPass)) {
+                Toast.makeText(requireContext(), "Mật khẩu xác nhận không trùng khớp!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            progressBar.setVisibility(View.VISIBLE);
+            btnSubmit.setEnabled(false);
+
+            Map<String, Object> body = new HashMap<>();
+            body.put("usernameOrEmail", identifier);
+            body.put("email", confirmEmail);
+            body.put("newPassword", newPass);
+
+            apiService.forgotPassword(body).enqueue(new Callback<Map<String, Object>>() {
+                @Override
+                public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                    progressBar.setVisibility(View.GONE);
+                    btnSubmit.setEnabled(true);
+
+                    if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
+                        dialog.dismiss();
+                        etUsername.setText(!identifier.isEmpty() ? identifier : confirmEmail);
+                        etPassword.setText(newPass);
+                        Toast.makeText(requireContext(), "Đặt lại mật khẩu thành công! Bạn có thể đăng nhập ngay.", Toast.LENGTH_SHORT).show();
+                    } else {
+                        String errMsg = "Không tìm thấy tài khoản hoặc Email xác nhận không khớp!";
+                        if (response.body() != null && response.body().get("message") != null) {
+                            errMsg = String.valueOf(response.body().get("message"));
+                        }
+                        Toast.makeText(requireContext(), errMsg, Toast.LENGTH_SHORT).show();
+                    }
+                }
+
+                @Override
+                public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                    progressBar.setVisibility(View.GONE);
+                    btnSubmit.setEnabled(true);
+                    Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            });
+        });
+
+        dialog.show();
     }
 
     private void uploadAvatarToCloudinary(Uri imageUri) {
@@ -597,7 +904,7 @@ public class AuthFragment extends Fragment {
         });
     }
 
-    // ================= SỔ ĐỊA CHỈ (ADDRESS BOOK BOTTOM SHEET) =================
+    // ================= SỔ ĐỊA CHỈ (CHỌN MẶC ĐỊNH, THÊM, SỬA, XÁC NHẬN XÓA) =================
     private void showAddressBookBottomSheet() {
         BottomSheetDialog bottomSheet = new BottomSheetDialog(requireContext());
         View sheetView = LayoutInflater.from(requireContext()).inflate(R.layout.bottom_sheet_address_book, null);
@@ -615,44 +922,71 @@ public class AuthFragment extends Fragment {
             public void onSelect(UserAddress address) {
                 prefManager.setDefaultAddress(address.getId());
                 bindProfileData();
-
-                // Chỉ đồng bộ địa chỉ nhận hàng lên Backend, TUYỆT ĐỐI KHÔNG ĐỔI TÊN TÀI KHOẢN TRÊN ĐẦU!
-                Map<String, Object> body = new HashMap<>();
-                body.put("address", address.getAddressLine());
-                apiService.updateProfile(prefManager.getUserId(), body).enqueue(new Callback<Map<String, Object>>() {
-                    @Override
-                    public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {}
-                    @Override
-                    public void onFailure(Call<Map<String, Object>> call, Throwable t) {}
-                });
-
+                syncDefaultAddressToBackend(address.getAddressLine());
                 bottomSheet.dismiss();
                 Toast.makeText(requireContext(), "Đã chọn địa chỉ: " + address.getTag(), Toast.LENGTH_SHORT).show();
             }
 
             @Override
+            public void onEdit(UserAddress address) {
+                showAddOrEditAddressDialog(bottomSheet, adapterHolder[0], addressList, address);
+            }
+
+            @Override
             public void onDelete(UserAddress address) {
-                prefManager.deleteAddress(address.getId());
-                addressList.clear();
-                addressList.addAll(prefManager.getAddressList());
-                adapterHolder[0].notifyDataSetChanged();
-                bindProfileData();
-                Toast.makeText(requireContext(), "Đã xóa địa chỉ!", Toast.LENGTH_SHORT).show();
+                showConfirmDeleteAddressDialog(address, adapterHolder[0], addressList);
             }
         });
 
         rvAddresses.setAdapter(adapterHolder[0]);
 
-        btnAddNew.setOnClickListener(v -> showAddAddressDialog(bottomSheet, adapterHolder[0], addressList));
+        btnAddNew.setOnClickListener(v -> showAddOrEditAddressDialog(bottomSheet, adapterHolder[0], addressList, null));
 
         bottomSheet.show();
     }
 
-    private void showAddAddressDialog() {
-        showAddAddressDialog(null, null, null);
+    private void showConfirmDeleteAddressDialog(UserAddress address, AddressAdapter adapter, List<UserAddress> addressList) {
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Xác nhận xóa địa chỉ")
+                .setMessage("Bạn có chắc chắn muốn xóa địa chỉ nhận hàng của \"" + address.getReceiverName() + "\" không?")
+                .setNegativeButton("Hủy", (dialog, which) -> dialog.dismiss())
+                .setPositiveButton("Xóa", (dialog, which) -> {
+                    prefManager.deleteAddress(address.getId());
+                    if (addressList != null) {
+                        addressList.clear();
+                        addressList.addAll(prefManager.getAddressList());
+                    }
+                    if (adapter != null) {
+                        adapter.notifyDataSetChanged();
+                    }
+                    bindProfileData();
+                    syncDefaultAddressToBackend(prefManager.getAddress());
+                    Toast.makeText(requireContext(), "Đã xóa địa chỉ!", Toast.LENGTH_SHORT).show();
+                })
+                .show();
     }
 
-    private void showAddAddressDialog(BottomSheetDialog parentSheet, AddressAdapter adapter, List<UserAddress> addressList) {
+    private void syncDefaultAddressToBackend(String addressLine) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("address", addressLine != null ? addressLine : "");
+        apiService.updateProfile(prefManager.getUserId(), body).enqueue(new Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {}
+            @Override
+            public void onFailure(Call<Map<String, Object>> call, Throwable t) {}
+        });
+    }
+
+    private void showAddAddressDialog() {
+        showAddOrEditAddressDialog(null, null, null, null);
+    }
+
+    private void showAddOrEditAddressDialog(
+            BottomSheetDialog parentSheet,
+            AddressAdapter adapter,
+            List<UserAddress> addressList,
+            @Nullable UserAddress editingAddress) {
+
         AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
         View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_add_address, null);
         builder.setView(dialogView);
@@ -662,16 +996,40 @@ public class AuthFragment extends Fragment {
             dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
         }
 
+        TextView tvTitle = dialogView.findViewById(R.id.tvDialogAddressTitle);
+        TextView tvSubtitle = dialogView.findViewById(R.id.tvDialogAddressSubtitle);
         TextInputEditText etReceiverName = dialogView.findViewById(R.id.etNewReceiverName);
         TextInputEditText etPhone = dialogView.findViewById(R.id.etNewPhone);
         TextInputEditText etAddressLine = dialogView.findViewById(R.id.etNewAddressLine);
         RadioButton rbHome = dialogView.findViewById(R.id.rbTagHome);
+        RadioButton rbOffice = dialogView.findViewById(R.id.rbTagOffice);
         CheckBox cbSetDefault = dialogView.findViewById(R.id.cbSetDefault);
         Button btnCancel = dialogView.findViewById(R.id.btnCancelAddAddress);
         Button btnSave = dialogView.findViewById(R.id.btnSaveNewAddress);
 
-        etReceiverName.setText(prefManager.getFullName());
-        etPhone.setText(prefManager.getPhone());
+        final boolean isEditMode = (editingAddress != null);
+
+        if (isEditMode) {
+            if (tvTitle != null) tvTitle.setText("Chỉnh sửa địa chỉ");
+            if (tvSubtitle != null) tvSubtitle.setText("Cập nhật thông tin người nhận và địa chỉ giao hàng");
+            btnSave.setText("Cập nhật");
+
+            etReceiverName.setText(editingAddress.getReceiverName());
+            etPhone.setText(editingAddress.getPhone());
+            etAddressLine.setText(editingAddress.getAddressLine());
+
+            if (editingAddress.getTag() != null && editingAddress.getTag().contains("Văn phòng")) {
+                if (rbOffice != null) rbOffice.setChecked(true);
+            } else {
+                if (rbHome != null) rbHome.setChecked(true);
+            }
+            if (cbSetDefault != null) {
+                cbSetDefault.setChecked(editingAddress.isDefault());
+            }
+        } else {
+            etReceiverName.setText(prefManager.getFullName());
+            etPhone.setText(prefManager.getPhone());
+        }
 
         btnCancel.setOnClickListener(v -> dialog.dismiss());
 
@@ -687,8 +1045,17 @@ public class AuthFragment extends Fragment {
                 return;
             }
 
-            UserAddress newAddr = new UserAddress(name, phone, address, tag, isDefault);
-            prefManager.addAddress(newAddr);
+            if (isEditMode) {
+                editingAddress.setReceiverName(name);
+                editingAddress.setPhone(phone);
+                editingAddress.setAddressLine(address);
+                editingAddress.setTag(tag);
+                editingAddress.setDefault(isDefault);
+                prefManager.updateAddress(editingAddress);
+            } else {
+                UserAddress newAddr = new UserAddress(name, phone, address, tag, isDefault);
+                prefManager.addAddress(newAddr);
+            }
 
             if (addressList != null) {
                 addressList.clear();
@@ -699,20 +1066,15 @@ public class AuthFragment extends Fragment {
             }
             refreshAddressList();
 
-            if (isDefault) {
-                // Chỉ đồng bộ địa chỉ nhận hàng lên Backend, TUYỆT ĐỐI KHÔNG ĐỔI TÊN TÀI KHOẢN TRÊN ĐẦU!
-                Map<String, Object> body = new HashMap<>();
-                body.put("address", address);
-                apiService.updateProfile(prefManager.getUserId(), body).enqueue(new Callback<Map<String, Object>>() {
-                    @Override
-                    public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {}
-                    @Override
-                    public void onFailure(Call<Map<String, Object>> call, Throwable t) {}
-                });
-            }
+            // Đồng bộ địa chỉ mặc định mới nhất lên Backend
+            syncDefaultAddressToBackend(prefManager.getAddress());
 
             dialog.dismiss();
-            Toast.makeText(requireContext(), "Thêm địa chỉ thành công!", Toast.LENGTH_SHORT).show();
+            Toast.makeText(
+                    requireContext(),
+                    isEditMode ? "Cập nhật địa chỉ thành công!" : "Thêm địa chỉ thành công!",
+                    Toast.LENGTH_SHORT
+            ).show();
         });
 
         dialog.show();

@@ -20,6 +20,9 @@ public interface ApiService {
     @retrofit2.http.POST("api/auth/firebase")
     retrofit2.Call<java.util.Map<String, Object>> firebaseLogin(@retrofit2.http.Body java.util.Map<String, Object> body);
 
+    @retrofit2.http.POST("api/auth/forgot-password")
+    retrofit2.Call<java.util.Map<String, Object>> forgotPassword(@retrofit2.http.Body java.util.Map<String, Object> body);
+
     @retrofit2.http.GET("api/users/{id}")
     retrofit2.Call<java.util.Map<String, Object>> getUserProfile(@retrofit2.http.Path("id") Long id);
 

@@ -155,11 +155,27 @@
                     android:textColor="@color/artifex_text_primary" />
             </com.google.android.material.textfield.TextInputLayout>
 
+            <!-- Nút Quên mật khẩu (chỉ hiện ở chế độ Đăng nhập) -->
+            <TextView
+                android:id="@+id/tvForgotPassword"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                android:layout_marginTop="8dp"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:padding="4dp"
+                android:text="Quên mật khẩu?"
+                android:textColor="@color/artifex_primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnSubmitAuth"
                 android:layout_width="match_parent"
                 android:layout_height="52dp"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="16dp"
                 android:backgroundTint="@color/artifex_primary"
                 android:text="Đăng Nhập"
                 android:textColor="@color/artifex_on_primary"
@@ -241,7 +257,7 @@
                             app:tint="@color/artifex_on_primary" />
                     </FrameLayout>
 
-                                        <!-- Hàng Họ tên kèm nút Sửa thông tin cá nhân -->
+                    <!-- Hàng Họ tên kèm nút Sửa thông tin cá nhân -->
                     <LinearLayout
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -280,7 +296,6 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            
             <!-- Card: Đơn mua của tôi -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/cardMyOrders"
