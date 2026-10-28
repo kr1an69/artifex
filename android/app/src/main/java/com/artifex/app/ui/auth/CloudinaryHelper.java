@@ -32,10 +32,15 @@ public class CloudinaryHelper {
         Handler mainHandler = new Handler(Looper.getMainLooper());
 
         new Thread(() -> {
-            try {
-                InputStream inputStream = context.getContentResolver().openInputStream(imageUri);
-                ByteArrayOutputStream byteBuffer = new ByteArrayOutputStream();
-                byte[] buffer = new byte[1024];
+            try (InputStream inputStream = context.getContentResolver().openInputStream(imageUri);
+                 ByteArrayOutputStream byteBuffer = new ByteArrayOutputStream()) {
+
+                if (inputStream == null) {
+                    mainHandler.post(() -> callback.onError("Không thể mở tệp ảnh!"));
+                    return;
+                }
+
+                byte[] buffer = new byte[2048];
                 int len;
                 while ((len = inputStream.read(buffer)) != -1) {
                     byteBuffer.write(buffer, 0, len);
@@ -55,14 +60,15 @@ public class CloudinaryHelper {
                         .post(requestBody)
                         .build();
 
-                Response response = client.newCall(request).execute();
-                if (response.isSuccessful() && response.body() != null) {
-                    String jsonData = response.body().string();
-                    JSONObject jsonObject = new JSONObject(jsonData);
-                    String secureUrl = jsonObject.getString("secure_url");
-                    mainHandler.post(() -> callback.onSuccess(secureUrl));
-                } else {
-                    mainHandler.post(() -> callback.onError("Upload ảnh lên Cloudinary thất bại!"));
+                try (Response response = client.newCall(request).execute()) {
+                    if (response.isSuccessful() && response.body() != null) {
+                        String jsonData = response.body().string();
+                        JSONObject jsonObject = new JSONObject(jsonData);
+                        String secureUrl = jsonObject.getString("secure_url");
+                        mainHandler.post(() -> callback.onSuccess(secureUrl));
+                    } else {
+                        mainHandler.post(() -> callback.onError("Upload ảnh lên Cloudinary thất bại!"));
+                    }
                 }
             } catch (Exception e) {
                 mainHandler.post(() -> callback.onError("Lỗi upload: " + e.getMessage()));

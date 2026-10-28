@@ -3,6 +3,13 @@ package com.artifex.app.ui.auth;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.List;
+
 public class SharedPrefManager {
 
     private static final String SHARED_PREF_NAME = "artifex_user_pref";
@@ -14,12 +21,15 @@ public class SharedPrefManager {
     private static final String KEY_ADDRESS = "key_address";
     private static final String KEY_AVATAR_URL = "key_avatar_url";
     private static final String KEY_IS_LOGGED_IN = "key_is_logged_in";
+    private static final String KEY_ADDRESS_LIST = "key_address_list";
 
     private static SharedPrefManager instance;
     private final Context ctx;
+    private final Gson gson;
 
     private SharedPrefManager(Context context) {
         this.ctx = context.getApplicationContext();
+        this.gson = new Gson();
     }
 
     public static synchronized SharedPrefManager getInstance(Context context) {
@@ -41,6 +51,15 @@ public class SharedPrefManager {
         editor.putString(KEY_AVATAR_URL, avatarUrl);
         editor.putBoolean(KEY_IS_LOGGED_IN, true);
         editor.apply();
+
+        // Khởi tạo một địa chỉ mặc định trong sổ địa chỉ nếu có dữ liệu
+        if (address != null && !address.trim().isEmpty()) {
+            List<UserAddress> currentList = getAddressList();
+            if (currentList.isEmpty()) {
+                UserAddress defaultAddr = new UserAddress(fullName, phone, address, "Nhà riêng", true);
+                addAddress(defaultAddr);
+            }
+        }
     }
 
     public boolean isLoggedIn() {
@@ -75,6 +94,85 @@ public class SharedPrefManager {
         SharedPreferences.Editor editor = ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).edit();
         editor.putString(KEY_AVATAR_URL, url);
         editor.apply();
+    }
+
+    public void updateProfile(String fullName, String phone, String address) {
+        SharedPreferences.Editor editor = ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).edit();
+        editor.putString(KEY_FULL_NAME, fullName);
+        editor.putString(KEY_PHONE, phone);
+        editor.putString(KEY_ADDRESS, address);
+        editor.apply();
+    }
+
+    // ================= SỔ ĐỊA CHỈ (ADDRESS BOOK) =================
+    public List<UserAddress> getAddressList() {
+        String json = ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).getString(KEY_ADDRESS_LIST, null);
+        if (json == null || json.trim().isEmpty()) {
+            List<UserAddress> list = new ArrayList<>();
+            String currentAddr = getAddress();
+            if (!currentAddr.isEmpty()) {
+                list.add(new UserAddress(getFullName(), getPhone(), currentAddr, "Nhà riêng", true));
+            }
+            return list;
+        }
+        Type type = new TypeToken<List<UserAddress>>() {}.getType();
+        return gson.fromJson(json, type);
+    }
+
+    public void saveAddressList(List<UserAddress> list) {
+        String json = gson.toJson(list);
+        SharedPreferences.Editor editor = ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).edit();
+        editor.putString(KEY_ADDRESS_LIST, json);
+        editor.apply();
+    }
+
+    public void addAddress(UserAddress newAddress) {
+        List<UserAddress> list = getAddressList();
+        if (list.isEmpty() || newAddress.isDefault()) {
+            for (UserAddress a : list) {
+                a.setDefault(false);
+            }
+            newAddress.setDefault(true);
+            updateProfile(newAddress.getReceiverName(), newAddress.getPhone(), newAddress.getAddressLine());
+        }
+        list.add(0, newAddress);
+        saveAddressList(list);
+    }
+
+    public void setDefaultAddress(String addressId) {
+        List<UserAddress> list = getAddressList();
+        UserAddress defaultAddress = null;
+        for (UserAddress a : list) {
+            if (a.getId().equals(addressId)) {
+                a.setDefault(true);
+                defaultAddress = a;
+            } else {
+                a.setDefault(false);
+            }
+        }
+        if (defaultAddress != null) {
+            updateProfile(defaultAddress.getReceiverName(), defaultAddress.getPhone(), defaultAddress.getAddressLine());
+        }
+        saveAddressList(list);
+    }
+
+    public void deleteAddress(String addressId) {
+        List<UserAddress> list = getAddressList();
+        boolean removedDefault = false;
+        for (int i = 0; i < list.size(); i++) {
+            if (list.get(i).getId().equals(addressId)) {
+                if (list.get(i).isDefault()) {
+                    removedDefault = true;
+                }
+                list.remove(i);
+                break;
+            }
+        }
+        if (removedDefault && !list.isEmpty()) {
+            list.get(0).setDefault(true);
+            updateProfile(list.get(0).getReceiverName(), list.get(0).getPhone(), list.get(0).getAddressLine());
+        }
+        saveAddressList(list);
     }
 
     public void clear() {
