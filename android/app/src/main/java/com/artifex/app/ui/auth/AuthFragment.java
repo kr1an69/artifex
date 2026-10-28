@@ -53,8 +53,8 @@ import retrofit2.Response;
 public class AuthFragment extends Fragment {
 
     private LinearLayout layoutAuthForm, layoutProfile;
-    private TextInputLayout tilFullName, tilEmail, tilConfirmPassword;
-    private TextInputEditText etFullName, etUsername, etEmail, etPassword, etConfirmPassword;
+    private TextInputLayout tilFullName, tilEmail, tilPhone, tilConfirmPassword;
+    private TextInputEditText etFullName, etUsername, etEmail, etPhone, etPassword, etConfirmPassword;
     private Button btnSubmitAuth, btnFirebaseAuth;
     private View btnLogout, btnChangePassword, cardShippingInfo;
     private View btnViewAllOrders, btnOrderPending, btnOrderProcessing, btnOrderShipping, btnOrderCompleted;
@@ -129,10 +129,12 @@ public class AuthFragment extends Fragment {
         layoutProfile = v.findViewById(R.id.layoutProfile);
         tilFullName = v.findViewById(R.id.tilFullName);
         tilEmail = v.findViewById(R.id.tilEmail);
+        tilPhone = v.findViewById(R.id.tilPhone);
         tilConfirmPassword = v.findViewById(R.id.tilConfirmPassword);
         etFullName = v.findViewById(R.id.etFullName);
         etUsername = v.findViewById(R.id.etUsername);
         etEmail = v.findViewById(R.id.etEmail);
+        etPhone = v.findViewById(R.id.etPhone);
         etPassword = v.findViewById(R.id.etPassword);
         etConfirmPassword = v.findViewById(R.id.etConfirmPassword);
 
@@ -246,6 +248,9 @@ public class AuthFragment extends Fragment {
         if (isRegisterMode) {
             tilFullName.setVisibility(View.VISIBLE);
             tilEmail.setVisibility(View.VISIBLE);
+            if (tilPhone != null) {
+                tilPhone.setVisibility(View.VISIBLE);
+            }
             if (tilConfirmPassword != null) {
                 tilConfirmPassword.setVisibility(View.VISIBLE);
             }
@@ -258,6 +263,9 @@ public class AuthFragment extends Fragment {
         } else {
             tilFullName.setVisibility(View.GONE);
             tilEmail.setVisibility(View.GONE);
+            if (tilPhone != null) {
+                tilPhone.setVisibility(View.GONE);
+            }
             if (tilConfirmPassword != null) {
                 tilConfirmPassword.setVisibility(View.GONE);
             }
@@ -536,6 +544,7 @@ public class AuthFragment extends Fragment {
         String fullName = etFullName.getText() != null ? etFullName.getText().toString().trim() : "";
         String username = etUsername.getText() != null ? etUsername.getText().toString().trim() : "";
         String email = etEmail.getText() != null ? etEmail.getText().toString().trim() : "";
+        String phone = (etPhone != null && etPhone.getText() != null) ? etPhone.getText().toString().trim() : "";
         String password = etPassword.getText() != null ? etPassword.getText().toString().trim() : "";
         String confirmPassword = (etConfirmPassword != null && etConfirmPassword.getText() != null)
                 ? etConfirmPassword.getText().toString().trim() : "";
@@ -565,6 +574,7 @@ public class AuthFragment extends Fragment {
         body.put("fullName", fullName);
         body.put("username", username);
         body.put("email", email);
+        body.put("phone", phone);
         body.put("password", password);
 
         apiService.register(body).enqueue(new Callback<Map<String, Object>>() {
@@ -743,7 +753,7 @@ public class AuthFragment extends Fragment {
         });
     }
 
-    // ================= QUÊN MẬT KHẨU (FIREBASE RESET EMAIL + BACKEND RESET) =================
+    // ================= QUÊN MẬT KHẨU TÀI KHOẢN THƯỜNG (GỬI TIN NHẮN SMS OTP 6 SỐ QUA TEXTBEE) =================
     private void showForgotPasswordDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
         View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_forgot_password, null);
@@ -754,67 +764,114 @@ public class AuthFragment extends Fragment {
             dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
         }
 
-        TextInputEditText etIdentifier = dialogView.findViewById(R.id.etForgotUsernameOrEmail);
-        TextInputEditText etConfirmEmail = dialogView.findViewById(R.id.etForgotEmail);
+        TextView tvSubtitle = dialogView.findViewById(R.id.tvForgotSubtitle);
+        LinearLayout layoutStep1 = dialogView.findViewById(R.id.layoutForgotStep1);
+        LinearLayout layoutStep2 = dialogView.findViewById(R.id.layoutForgotStep2);
+
+        // Các View Bước 1
+        TextInputEditText etForgotUsername = dialogView.findViewById(R.id.etForgotUsername);
+        TextInputEditText etForgotContact = dialogView.findViewById(R.id.etForgotContact);
+        Button btnCancelStep1 = dialogView.findViewById(R.id.btnCancelForgotStep1);
+        Button btnRequestOtp = dialogView.findViewById(R.id.btnRequestOtp);
+
+        // Các View Bước 2 (KHÔNG hiển thị lộ mã OTP trong form)
+        TextView tvOtpDeliveryStatus = dialogView.findViewById(R.id.tvOtpDeliveryStatus);
+        TextInputEditText etForgotOtpCode = dialogView.findViewById(R.id.etForgotOtpCode);
         TextInputEditText etNewPassword = dialogView.findViewById(R.id.etForgotNewPassword);
         TextInputEditText etConfirmPassword = dialogView.findViewById(R.id.etForgotConfirmPassword);
-        Button btnSendFirebaseEmail = dialogView.findViewById(R.id.btnSendFirebaseResetEmail);
-        Button btnCancel = dialogView.findViewById(R.id.btnCancelForgotPass);
-        Button btnSubmit = dialogView.findViewById(R.id.btnSubmitForgotPass);
+        Button btnBackToStep1 = dialogView.findViewById(R.id.btnBackToStep1);
+        Button btnSubmitForgotPass = dialogView.findViewById(R.id.btnSubmitForgotPass);
 
+        // Tự động điền nếu người dùng đã gõ sẵn tài khoản ở màn hình đăng nhập
         String typedUsername = etUsername.getText() != null ? etUsername.getText().toString().trim() : "";
         if (!typedUsername.isEmpty()) {
-            etIdentifier.setText(typedUsername);
-            if (typedUsername.contains("@")) {
-                etConfirmEmail.setText(typedUsername);
-            }
+            etForgotUsername.setText(typedUsername);
         }
 
-        btnCancel.setOnClickListener(v -> dialog.dismiss());
+        final String[] verifiedUsernameHolder = new String[]{""};
 
-        btnSendFirebaseEmail.setOnClickListener(v -> {
-            String targetEmail = etConfirmEmail.getText() != null ? etConfirmEmail.getText().toString().trim() : "";
-            if (targetEmail.isEmpty()) {
-                String idInput = etIdentifier.getText() != null ? etIdentifier.getText().toString().trim() : "";
-                if (idInput.contains("@")) {
-                    targetEmail = idInput;
-                }
-            }
+        btnCancelStep1.setOnClickListener(v -> dialog.dismiss());
 
-            if (targetEmail.isEmpty() || !Patterns.EMAIL_ADDRESS.matcher(targetEmail).matches()) {
-                Toast.makeText(requireContext(), "Vui lòng nhập địa chỉ Email hợp lệ để nhận link từ Firebase!", Toast.LENGTH_SHORT).show();
+        // BƯỚC 1: Bấm "Gửi SMS OTP"
+        btnRequestOtp.setOnClickListener(v -> {
+            final String usernameInput = etForgotUsername.getText() != null ? etForgotUsername.getText().toString().trim() : "";
+            final String rawContactInput = etForgotContact.getText() != null ? etForgotContact.getText().toString().trim() : "";
+
+            if (rawContactInput.isEmpty() && usernameInput.isEmpty()) {
+                Toast.makeText(requireContext(), "Vui lòng nhập Số điện thoại để nhận tin nhắn SMS OTP!", Toast.LENGTH_SHORT).show();
                 return;
             }
+            final String contactInput = rawContactInput.isEmpty() ? usernameInput : rawContactInput;
 
-            btnSendFirebaseEmail.setEnabled(false);
-            FirebaseAuthHelper.sendPasswordResetEmail(requireContext(), targetEmail, new FirebaseAuthHelper.ResetPasswordCallback() {
+            progressBar.setVisibility(View.VISIBLE);
+            btnRequestOtp.setEnabled(false);
+
+            Map<String, Object> body = new HashMap<>();
+            body.put("username", usernameInput);
+            body.put("emailOrPhone", contactInput);
+
+            apiService.requestForgotPasswordOtp(body).enqueue(new Callback<Map<String, Object>>() {
                 @Override
-                public void onSuccess(String message) {
-                    btnSendFirebaseEmail.setEnabled(true);
-                    Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
+                public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                    progressBar.setVisibility(View.GONE);
+                    btnRequestOtp.setEnabled(true);
+
+                    if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
+                        String resolvedUser = response.body().get("username") != null
+                                ? String.valueOf(response.body().get("username"))
+                                : usernameInput;
+                        String maskedContact = response.body().get("maskedContact") != null
+                                ? String.valueOf(response.body().get("maskedContact"))
+                                : contactInput;
+
+                        verifiedUsernameHolder[0] = resolvedUser;
+
+                        // Chuyển sang giao diện Bước 2 (Chỉ gửi tin nhắn SMS về điện thoại thật, KHÔNG hiển thị trên máy ảo)
+                        layoutStep1.setVisibility(View.GONE);
+                        layoutStep2.setVisibility(View.VISIBLE);
+                        if (tvSubtitle != null) {
+                            tvSubtitle.setText("Bước 2/2: Nhập mã OTP từ tin nhắn SMS và đặt mật khẩu mới cho \"" + resolvedUser + "\"");
+                        }
+                        if (tvOtpDeliveryStatus != null) {
+                            tvOtpDeliveryStatus.setText("Đã gửi tin nhắn SMS chứa mã OTP (6 chữ số) tới " + maskedContact + ".");
+                        }
+
+                        Toast.makeText(requireContext(), "Đã gửi tin nhắn SMS OTP tới " + maskedContact + "! Vui lòng kiểm tra tin nhắn trên điện thoại.", Toast.LENGTH_LONG).show();
+                    } else {
+                        String errMsg = "Thông tin xác minh không khớp với tài khoản!";
+                        if (response.body() != null && response.body().get("message") != null) {
+                            errMsg = String.valueOf(response.body().get("message"));
+                        }
+                        Toast.makeText(requireContext(), errMsg, Toast.LENGTH_SHORT).show();
+                    }
                 }
 
                 @Override
-                public void onError(String errorMessage) {
-                    btnSendFirebaseEmail.setEnabled(true);
-                    Toast.makeText(requireContext(), errorMessage, Toast.LENGTH_LONG).show();
+                public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                    progressBar.setVisibility(View.GONE);
+                    btnRequestOtp.setEnabled(true);
+                    Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
                 }
             });
         });
 
-        btnSubmit.setOnClickListener(v -> {
-            String identifier = etIdentifier.getText() != null ? etIdentifier.getText().toString().trim() : "";
-            String confirmEmail = etConfirmEmail.getText() != null ? etConfirmEmail.getText().toString().trim() : "";
+        // Nút "Quay lại" từ Bước 2 về Bước 1
+        btnBackToStep1.setOnClickListener(v -> {
+            layoutStep2.setVisibility(View.GONE);
+            layoutStep1.setVisibility(View.VISIBLE);
+            if (tvSubtitle != null) {
+                tvSubtitle.setText("Bước 1/2: Xác minh tài khoản để nhận mã OTP 6 chữ số");
+            }
+        });
+
+        // BƯỚC 2: Bấm "Đổi mật khẩu"
+        btnSubmitForgotPass.setOnClickListener(v -> {
+            String otpInput = etForgotOtpCode.getText() != null ? etForgotOtpCode.getText().toString().trim() : "";
             String newPass = etNewPassword.getText() != null ? etNewPassword.getText().toString().trim() : "";
             String confirmPass = etConfirmPassword.getText() != null ? etConfirmPassword.getText().toString().trim() : "";
 
-            if (identifier.isEmpty() && confirmEmail.isEmpty()) {
-                Toast.makeText(requireContext(), "Vui lòng nhập tên đăng nhập hoặc địa chỉ Email!", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            if (!confirmEmail.isEmpty() && !Patterns.EMAIL_ADDRESS.matcher(confirmEmail).matches()) {
-                Toast.makeText(requireContext(), "Địa chỉ Email xác nhận không đúng định dạng!", Toast.LENGTH_SHORT).show();
+            if (otpInput.length() != 6) {
+                Toast.makeText(requireContext(), "Vui lòng nhập đủ 6 chữ số mã OTP!", Toast.LENGTH_SHORT).show();
                 return;
             }
 
@@ -829,26 +886,35 @@ public class AuthFragment extends Fragment {
             }
 
             progressBar.setVisibility(View.VISIBLE);
-            btnSubmit.setEnabled(false);
+            btnSubmitForgotPass.setEnabled(false);
 
             Map<String, Object> body = new HashMap<>();
-            body.put("usernameOrEmail", identifier);
-            body.put("email", confirmEmail);
+            body.put("username", verifiedUsernameHolder[0]);
+            body.put("otp", otpInput);
             body.put("newPassword", newPass);
 
             apiService.forgotPassword(body).enqueue(new Callback<Map<String, Object>>() {
                 @Override
                 public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                     progressBar.setVisibility(View.GONE);
-                    btnSubmit.setEnabled(true);
+                    btnSubmitForgotPass.setEnabled(true);
 
                     if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
                         dialog.dismiss();
-                        etUsername.setText(!identifier.isEmpty() ? identifier : confirmEmail);
+                        etUsername.setText(verifiedUsernameHolder[0]);
                         etPassword.setText(newPass);
-                        Toast.makeText(requireContext(), "Đặt lại mật khẩu thành công! Bạn có thể đăng nhập ngay.", Toast.LENGTH_SHORT).show();
+
+                        if (response.body().get("user") instanceof Map) {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> userMap = (Map<String, Object>) response.body().get("user");
+                            saveUserDataToPref(userMap);
+                            checkLoginState();
+                            Toast.makeText(requireContext(), "Xác thực SMS OTP & đặt mật khẩu thành công! Đã tự động đăng nhập.", Toast.LENGTH_LONG).show();
+                        } else {
+                            Toast.makeText(requireContext(), "Đặt lại mật khẩu thành công! Bạn có thể bấm Đăng nhập ngay.", Toast.LENGTH_LONG).show();
+                        }
                     } else {
-                        String errMsg = "Không tìm thấy tài khoản hoặc Email xác nhận không khớp!";
+                        String errMsg = "Mã OTP không đúng hoặc đã hết hạn!";
                         if (response.body() != null && response.body().get("message") != null) {
                             errMsg = String.valueOf(response.body().get("message"));
                         }
@@ -859,7 +925,7 @@ public class AuthFragment extends Fragment {
                 @Override
                 public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                     progressBar.setVisibility(View.GONE);
-                    btnSubmit.setEnabled(true);
+                    btnSubmitForgotPass.setEnabled(true);
                     Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
                 }
             });

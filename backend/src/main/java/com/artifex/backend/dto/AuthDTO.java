@@ -66,9 +66,17 @@ public class AuthDTO {
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
+    public static class ForgotPasswordOtpRequest {
+        private String username;
+        private String emailOrPhone;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class ForgotPasswordRequest {
-        private String usernameOrEmail;
-        private String email;
+        private String username;
+        private String otp;
         private String newPassword;
     }
 }

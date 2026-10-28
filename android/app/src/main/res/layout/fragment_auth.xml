@@ -17,6 +17,7 @@
             android:id="@+id/layoutAuthForm"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:importantForAutofill="noExcludeDescendants"
             android:orientation="vertical"
             android:visibility="visible">
 
@@ -104,6 +105,29 @@
                     android:layout_height="wrap_content"
                     android:hint="Địa chỉ Email"
                     android:inputType="textEmailAddress"
+                    android:textColor="@color/artifex_text_primary" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/tilPhone"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:textColorHint="@color/artifex_text_muted"
+                android:visibility="gone"
+                app:boxBackgroundColor="@color/artifex_surface"
+                app:boxCornerRadiusBottomEnd="12dp"
+                app:boxCornerRadiusBottomStart="12dp"
+                app:boxCornerRadiusTopEnd="12dp"
+                app:boxCornerRadiusTopStart="12dp"
+                app:boxStrokeColor="@color/artifex_primary">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etPhone"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Số điện thoại (nhận mã SMS OTP)"
+                    android:inputType="phone"
                     android:textColor="@color/artifex_text_primary" />
             </com.google.android.material.textfield.TextInputLayout>
 
