@@ -1,33 +1,98 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/artifex_bg"
     android:orientation="vertical"
-    android:padding="20dp"
-    android:gravity="center">
+    android:background="@color/artifex_bg">
 
-    <ImageView
-        android:layout_width="64dp"
-        android:layout_height="64dp"
-        android:src="@drawable/ic_nav_catalog"
-        android:contentDescription="Catalog Icon" />
-
-    <TextView
-        android:layout_width="wrap_content"
+    <!-- Top Bar & Search -->
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="Danh Mục Linh Kiện"
-        android:textColor="@color/artifex_text_primary"
-        android:textSize="20sp"
-        android:textStyle="bold" />
+        android:orientation="horizontal"
+        android:padding="16dp"
+        android:gravity="center_vertical">
 
-    <TextView
-        android:layout_width="wrap_content"
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minHeight="48dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp"
+            app:cardBackgroundColor="@color/artifex_surface"
+            app:strokeColor="@color/artifex_border"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp">
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@android:drawable/ic_menu_search"
+                    app:tint="@color/artifex_text_muted"
+                    android:contentDescription="Search Icon"/>
+
+                <EditText
+                    android:id="@+id/edit_search"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@null"
+                    android:hint="Tìm kiếm linh kiện..."
+                    android:textColorHint="@color/artifex_text_muted"
+                    android:textColor="@color/artifex_text_primary"
+                    android:textSize="14sp"
+                    android:inputType="text"
+                    android:maxLines="1" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Filter Button -->
+        <ImageButton
+            android:id="@+id/btn_filter"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="12dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_sort_by_size"
+            app:tint="@color/artifex_primary"
+            android:contentDescription="Lọc" />
+    </LinearLayout>
+
+    <!-- Categories -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_categories"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="Phụ trách: Bạn 2 (Catalog / Danh mục &amp; Tìm kiếm)"
-        android:textColor="@color/artifex_text_secondary"
-        android:textSize="14sp" />
+        android:clipToPadding="false"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="8dp"
+        android:orientation="horizontal"
+        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+        tools:listitem="@layout/item_category"/>
+
+    <!-- Product Grid -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_products"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="16dp"
+        app:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
+        app:spanCount="2"
+        tools:listitem="@layout/item_product_card"/>
 
 </LinearLayout>
