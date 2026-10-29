@@ -41,8 +41,11 @@ public class AuthDTO {
     @AllArgsConstructor
     public static class UpdateProfileRequest {
         private String fullName;
+        private String email;
         private String phone;
         private String address;
+        private String dateOfBirth;
+        private String gender;
     }
 
     @Data
@@ -50,5 +53,30 @@ public class AuthDTO {
     @AllArgsConstructor
     public static class UpdateAvatarRequest {
         private String avatarUrl;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ChangePasswordRequest {
+        private String oldPassword;
+        private String newPassword;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ForgotPasswordOtpRequest {
+        private String username;
+        private String emailOrPhone;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ForgotPasswordRequest {
+        private String username;
+        private String otp;
+        private String newPassword;
     }
 }

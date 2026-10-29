@@ -52,6 +52,15 @@ public class UserController {
         }
 
         User user = userOpt.get();
+        if (request.getEmail() != null && !request.getEmail().trim().isEmpty()) {
+            String newEmail = request.getEmail().trim().toLowerCase();
+            if (!newEmail.equals(user.getEmail()) && userRepository.existsByEmail(newEmail)) {
+                response.put("status", "ERROR");
+                response.put("message", "Email đã được sử dụng bởi tài khoản khác!");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
+            user.setEmail(newEmail);
+        }
         if (request.getFullName() != null && !request.getFullName().trim().isEmpty()) {
             user.setFullName(request.getFullName().trim());
         }
@@ -60,6 +69,12 @@ public class UserController {
         }
         if (request.getAddress() != null) {
             user.setAddress(request.getAddress().trim());
+        }
+        if (request.getDateOfBirth() != null) {
+            user.setDateOfBirth(request.getDateOfBirth().trim());
+        }
+        if (request.getGender() != null) {
+            user.setGender(request.getGender().trim());
         }
 
         User updatedUser = userRepository.save(user);
@@ -98,6 +113,50 @@ public class UserController {
         response.put("status", "SUCCESS");
         response.put("message", "Cập nhật ảnh đại diện thành công!");
         response.put("user", updatedUser);
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/{id}/password")
+    public ResponseEntity<Map<String, Object>> changePassword(@PathVariable Long id,
+                                                              @RequestBody ChangePasswordRequest request) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        Optional<User> userOpt = userRepository.findById(id);
+
+        if (userOpt.isEmpty()) {
+            response.put("status", "ERROR");
+            response.put("message", "Không tìm thấy người dùng!");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+        }
+
+        User user = userOpt.get();
+
+        // Kiểm tra chặn nếu là tài khoản đăng nhập qua Google
+        if ("FIREBASE_AUTH".equals(user.getPassword())) {
+            response.put("status", "ERROR");
+            response.put("message", "Tài khoản liên kết Google không sử dụng mật khẩu này!");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+
+        // Validate dữ liệu đầu vào
+        if (request.getOldPassword() == null || request.getNewPassword() == null ||
+            request.getNewPassword().trim().length() < 6) {
+            response.put("status", "ERROR");
+            response.put("message", "Mật khẩu mới phải có ít nhất 6 ký tự!");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+
+        // Kiểm tra khớp mật khẩu cũ
+        if (!user.getPassword().equals(request.getOldPassword().trim())) {
+            response.put("status", "ERROR");
+            response.put("message", "Mật khẩu hiện tại không chính xác!");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+
+        user.setPassword(request.getNewPassword().trim());
+        userRepository.save(user);
+
+        response.put("status", "SUCCESS");
+        response.put("message", "Đổi mật khẩu thành công!");
         return ResponseEntity.ok(response);
     }
 }
