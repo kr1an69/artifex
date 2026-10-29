@@ -19,6 +19,7 @@ public class AddressAdapter extends RecyclerView.Adapter<AddressAdapter.AddressV
 
     public interface OnAddressListener {
         void onSelect(UserAddress address);
+        void onEdit(UserAddress address);
         void onDelete(UserAddress address);
     }
 
@@ -61,6 +62,14 @@ public class AddressAdapter extends RecyclerView.Adapter<AddressAdapter.AddressV
             }
         });
 
+        if (holder.btnEdit != null) {
+            holder.btnEdit.setOnClickListener(v -> {
+                if (listener != null) {
+                    listener.onEdit(item);
+                }
+            });
+        }
+
         holder.btnDelete.setOnClickListener(v -> {
             if (listener != null) {
                 listener.onDelete(item);
@@ -76,7 +85,7 @@ public class AddressAdapter extends RecyclerView.Adapter<AddressAdapter.AddressV
     static class AddressViewHolder extends RecyclerView.ViewHolder {
         MaterialCardView card;
         TextView tvReceiverName, tvPhone, tvAddressLine, tvTag, tvDefaultBadge;
-        ImageButton btnDelete;
+        ImageButton btnEdit, btnDelete;
 
         AddressViewHolder(@NonNull View v) {
             super(v);
@@ -86,6 +95,7 @@ public class AddressAdapter extends RecyclerView.Adapter<AddressAdapter.AddressV
             tvAddressLine = v.findViewById(R.id.tvItemAddressLine);
             tvTag = v.findViewById(R.id.tvItemTag);
             tvDefaultBadge = v.findViewById(R.id.tvItemDefaultBadge);
+            btnEdit = v.findViewById(R.id.btnItemEdit);
             btnDelete = v.findViewById(R.id.btnItemDelete);
         }
     }

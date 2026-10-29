@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    app:cardBackgroundColor="@color/artifex_surface"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="0dp"
+    app:strokeColor="@color/artifex_border"
+    app:strokeWidth="1dp">
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="24dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Xác thực Firebase / Google"
+                android:textColor="@color/artifex_text_primary"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Đăng nhập hoặc tự động tạo phiên xác thực trên Firebase Authentication và đồng bộ về Artifex"
+                android:textColor="@color/artifex_text_secondary"
+                android:textSize="13sp" />
+
+            <!-- 1. Email Firebase / Google -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:hint="Email Google / Firebase"
+                android:textColorHint="@color/artifex_text_muted"
+                app:boxBackgroundColor="@color/artifex_surface_variant"
+                app:boxCornerRadiusBottomEnd="12dp"
+                app:boxCornerRadiusBottomStart="12dp"
+                app:boxCornerRadiusTopEnd="12dp"
+                app:boxCornerRadiusTopStart="12dp"
+                app:boxStrokeColor="@color/artifex_primary">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etFirebaseEmail"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textEmailAddress"
+                    android:textColor="@color/artifex_text_primary" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- 2. Mật khẩu xác thực Firebase -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:hint="Mật khẩu xác thực (tối thiểu 6 ký tự)"
+                android:textColorHint="@color/artifex_text_muted"
+                app:boxBackgroundColor="@color/artifex_surface_variant"
+                app:boxCornerRadiusBottomEnd="12dp"
+                app:boxCornerRadiusBottomStart="12dp"
+                app:boxCornerRadiusTopEnd="12dp"
+                app:boxCornerRadiusTopStart="12dp"
+                app:boxStrokeColor="@color/artifex_primary"
+                app:passwordToggleEnabled="true">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etFirebasePassword"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textPassword"
+                    android:textColor="@color/artifex_text_primary" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- 3. Họ và tên hiển thị (nếu là lần đầu liên kết) -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:hint="Họ và tên hiển thị (Tùy chọn)"
+                android:textColorHint="@color/artifex_text_muted"
+                app:boxBackgroundColor="@color/artifex_surface_variant"
+                app:boxCornerRadiusBottomEnd="12dp"
+                app:boxCornerRadiusBottomStart="12dp"
+                app:boxCornerRadiusTopEnd="12dp"
+                app:boxCornerRadiusTopStart="12dp"
+                app:boxStrokeColor="@color/artifex_primary">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/etFirebaseFullName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textPersonName"
+                    android:textColor="@color/artifex_text_primary" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Hàng nút Hủy & Xác thực -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:gravity="end"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnCancelFirebaseDialog"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:text="Hủy"
+                    android:textColor="@color/artifex_text_secondary" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSubmitFirebaseDialog"
+                    android:layout_width="wrap_content"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="8dp"
+                    android:backgroundTint="@color/artifex_primary"
+                    android:text="Xác thực Firebase"
+                    android:textColor="@color/artifex_on_primary"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    app:cornerRadius="12dp" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+</com.google.android.material.card.MaterialCardView>
