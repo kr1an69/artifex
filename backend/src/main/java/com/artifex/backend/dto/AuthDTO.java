@@ -24,6 +24,16 @@ public class AuthDTO {
         private String fullName;
         private String phone;
         private String address;
+        private String otp;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class RegisterOtpRequest {
+        private String username;
+        private String phone;
+        private String email;
     }
 
     @Data
