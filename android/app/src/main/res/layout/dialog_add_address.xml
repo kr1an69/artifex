@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    app:cardBackgroundColor="@color/artifex_surface"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="0dp"
+    app:strokeColor="@color/artifex_border"
+    app:strokeWidth="1dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:id="@+id/tvDialogAddressTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Thêm địa chỉ mới"
+            android:textColor="@color/artifex_text_primary"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvDialogAddressSubtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Nhập thông tin người nhận và địa chỉ giao hàng"
+            android:textColor="@color/artifex_text_secondary"
+            android:textSize="13sp" />
+
+        <!-- Họ và tên người nhận -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:textColorHint="@color/artifex_text_muted"
+            app:boxBackgroundColor="@color/artifex_surface_variant"
+            app:boxCornerRadiusBottomEnd="12dp"
+            app:boxCornerRadiusBottomStart="12dp"
+            app:boxCornerRadiusTopEnd="12dp"
+            app:boxCornerRadiusTopStart="12dp"
+            app:boxStrokeColor="@color/artifex_primary">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etNewReceiverName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Tên người nhận"
+                android:inputType="textPersonName"
+                android:textColor="@color/artifex_text_primary" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Số điện thoại người nhận -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:textColorHint="@color/artifex_text_muted"
+            app:boxBackgroundColor="@color/artifex_surface_variant"
+            app:boxCornerRadiusBottomEnd="12dp"
+            app:boxCornerRadiusBottomStart="12dp"
+            app:boxCornerRadiusTopEnd="12dp"
+            app:boxCornerRadiusTopStart="12dp"
+            app:boxStrokeColor="@color/artifex_primary">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etNewPhone"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Số điện thoại"
+                android:inputType="phone"
+                android:textColor="@color/artifex_text_primary" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Địa chỉ chi tiết -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:textColorHint="@color/artifex_text_muted"
+            app:boxBackgroundColor="@color/artifex_surface_variant"
+            app:boxCornerRadiusBottomEnd="12dp"
+            app:boxCornerRadiusBottomStart="12dp"
+            app:boxCornerRadiusTopEnd="12dp"
+            app:boxCornerRadiusTopStart="12dp"
+            app:boxStrokeColor="@color/artifex_primary">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etNewAddressLine"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Địa chỉ chi tiết (Số nhà, đường, phường, quận...)"
+                android:inputType="textPostalAddress"
+                android:textColor="@color/artifex_text_primary" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- Phân loại địa chỉ -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Loại địa chỉ:"
+            android:textColor="@color/artifex_text_secondary"
+            android:textSize="13sp" />
+
+        <RadioGroup
+            android:id="@+id/rgAddressTag"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal">
+
+            <RadioButton
+                android:id="@+id/rbTagHome"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:text="🏠 Nhà riêng"
+                android:textColor="@color/artifex_text_primary" />
+
+            <RadioButton
+                android:id="@+id/rbTagOffice"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="24dp"
+                android:text="🏢 Văn phòng"
+                android:textColor="@color/artifex_text_primary" />
+        </RadioGroup>
+
+        <!-- Checkbox Mặc định -->
+        <CheckBox
+            android:id="@+id/cbSetDefault"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:checked="false"
+            android:text="Đặt làm địa chỉ giao hàng mặc định"
+            android:textColor="@color/artifex_text_primary"
+            android:textSize="13sp" />
+
+        <!-- Nút Hủy & Lưu -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:gravity="end"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCancelAddAddress"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:text="Hủy"
+                android:textColor="@color/artifex_text_secondary" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSaveNewAddress"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                android:backgroundTint="@color/artifex_primary"
+                android:text="Lưu địa chỉ"
+                android:textColor="@color/artifex_on_primary"
+                app:cornerRadius="12dp" />
+        </LinearLayout>
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>
