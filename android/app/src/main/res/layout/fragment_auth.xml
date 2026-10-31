@@ -45,7 +45,8 @@
                 android:id="@+id/tilFullName"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
+                android:layout_marginTop="16dp"
+                android:hint="Họ và tên"
                 android:textColorHint="@color/artifex_text_muted"
                 android:visibility="gone"
                 app:boxBackgroundColor="@color/artifex_surface"
@@ -59,7 +60,6 @@
                     android:id="@+id/etFullName"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="Họ và tên"
                     android:inputType="textPersonName"
                     android:textColor="@color/artifex_text_primary" />
             </com.google.android.material.textfield.TextInputLayout>
@@ -69,6 +69,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
+                android:hint="Tên đăng nhập hoặc Số điện thoại"
                 android:textColorHint="@color/artifex_text_muted"
                 app:boxBackgroundColor="@color/artifex_surface"
                 app:boxCornerRadiusBottomEnd="12dp"
@@ -81,7 +82,6 @@
                     android:id="@+id/etUsername"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="Tên đăng nhập hoặc Email"
                     android:textColor="@color/artifex_text_primary" />
             </com.google.android.material.textfield.TextInputLayout>
 
@@ -90,6 +90,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
+                android:hint="Địa chỉ Email (@gmail.com)"
                 android:textColorHint="@color/artifex_text_muted"
                 android:visibility="gone"
                 app:boxBackgroundColor="@color/artifex_surface"
@@ -103,7 +104,6 @@
                     android:id="@+id/etEmail"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="Địa chỉ Email"
                     android:inputType="textEmailAddress"
                     android:textColor="@color/artifex_text_primary" />
             </com.google.android.material.textfield.TextInputLayout>
@@ -113,6 +113,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
+                android:hint="Số điện thoại (nhận mã SMS OTP)"
                 android:textColorHint="@color/artifex_text_muted"
                 android:visibility="gone"
                 app:boxBackgroundColor="@color/artifex_surface"
@@ -126,7 +127,6 @@
                     android:id="@+id/etPhone"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="Số điện thoại (nhận mã SMS OTP)"
                     android:inputType="phone"
                     android:textColor="@color/artifex_text_primary" />
             </com.google.android.material.textfield.TextInputLayout>
@@ -136,6 +136,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
+                android:hint="Mật khẩu"
                 android:textColorHint="@color/artifex_text_muted"
                 app:boxBackgroundColor="@color/artifex_surface"
                 app:boxCornerRadiusBottomEnd="12dp"
@@ -149,7 +150,6 @@
                     android:id="@+id/etPassword"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="Mật khẩu"
                     android:inputType="textPassword"
                     android:textColor="@color/artifex_text_primary" />
             </com.google.android.material.textfield.TextInputLayout>
@@ -160,6 +160,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
+                android:hint="Xác nhận lại mật khẩu"
                 android:textColorHint="@color/artifex_text_muted"
                 android:visibility="gone"
                 app:boxBackgroundColor="@color/artifex_surface"
@@ -174,7 +175,6 @@
                     android:id="@+id/etConfirmPassword"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="Xác nhận lại mật khẩu"
                     android:inputType="textPassword"
                     android:textColor="@color/artifex_text_primary" />
             </com.google.android.material.textfield.TextInputLayout>

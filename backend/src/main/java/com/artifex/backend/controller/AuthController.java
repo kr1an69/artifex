@@ -3,28 +3,23 @@ package com.artifex.backend.controller;
 import com.artifex.backend.dto.AuthDTO.*;
 import com.artifex.backend.entity.User;
 import com.artifex.backend.repository.UserRepository;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.io.File;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -55,56 +50,158 @@ public class AuthController {
     }
 
     /**
-     * Tự động thiết lập cầu nối cổng `adb reverse tcp:8080 tcp:8080` khi Backend khởi động
-     * để cả `10.0.2.2:8080`, `127.0.0.1:8080` và IP LAN đều kết nối thông suốt tới Spring Boot.
+     * Bước 1 Đăng ký: Kiểm tra tên đăng nhập & Số điện thoại, gửi mã xác thực SMS OTP thật.
      */
-    @PostConstruct
-    public void setupAdbReverseBridge() {
-        Thread bridgeThread = new Thread(() -> {
-            try {
-                String adbPath = resolveAdbExecutable();
-                new ProcessBuilder(adbPath, "reverse", "tcp:8080", "tcp:8080")
-                        .redirectErrorStream(true)
-                        .start()
-                        .waitFor(3, TimeUnit.SECONDS);
-            } catch (Exception ignored) {
+    @PostMapping("/register/send-otp")
+    public ResponseEntity<Map<String, Object>> sendRegisterOtp(@RequestBody RegisterOtpRequest request) {
+        Map<String, Object> response = new LinkedHashMap<>();
+
+        String username = request.getUsername() != null ? request.getUsername().trim() : "";
+        String phone = request.getPhone() != null ? request.getPhone().trim() : "";
+
+        if (username.isEmpty() || phone.isEmpty()) {
+            response.put("status", "ERROR");
+            response.put("message", "Vui lòng nhập Tên đăng nhập và Số điện thoại!");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+
+        if (userRepository.existsByUsername(username)) {
+            response.put("status", "ERROR");
+            response.put("message", "Tên đăng nhập đã tồn tại! Vui lòng chọn tên đăng nhập khác.");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+
+        String domesticPhone = toDomesticVietnamPhone(phone);
+        if (domesticPhone.length() != 10) {
+            response.put("status", "ERROR");
+            response.put("message", "Vui lòng nhập đúng Số điện thoại di động (10 chữ số) để nhận mã OTP!");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+
+        String email = request.getEmail() != null ? request.getEmail().trim().toLowerCase() : "";
+        if (!email.isEmpty()) {
+            if (!email.endsWith("@gmail.com")) {
+                response.put("status", "ERROR");
+                response.put("message", "Email phải có định dạng @gmail.com!");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
             }
-        });
-        bridgeThread.setDaemon(true);
-        bridgeThread.start();
+            if (userRepository.existsByEmail(email)) {
+                response.put("status", "ERROR");
+                response.put("message", "Email này đã được sử dụng cho một tài khoản khác!");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
+        }
+
+        if (userRepository.existsByPhone(domesticPhone) || userRepository.existsByPhone(phone)) {
+            response.put("status", "ERROR");
+            response.put("message", "Số điện thoại này đã được đăng ký cho tài khoản khác!");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+
+        // Sinh mã OTP 6 chữ số ngẫu nhiên
+        String otpCode = String.format("%06d", ThreadLocalRandom.current().nextInt(100000, 1000000));
+        String storageKey = "reg:" + domesticPhone;
+        otpStorage.put(storageKey, new OtpRecord(otpCode, System.currentTimeMillis() + OTP_EXPIRATION_MS));
+
+        // Gửi tin nhắn SMS thật qua gateway TextBee
+        String smsMessage = "[ARTIFEX PC] Ma xac thuc OTP tao tai khoan Artifex cua ban la: " + otpCode + " (Hieu luc 5 phut). Tuyet doi khong chia se ma nay!";
+        boolean gatewaySent = sendRealSmsViaGateway(domesticPhone, otpCode, smsMessage);
+
+        System.out.println("==================================================================");
+        System.out.println("[ARTIFEX SMS OTP] YEU CAU MA OTP DANG KY TAI KHOAN MOI");
+        System.out.println("[ARTIFEX SMS OTP] Tên đăng nhập: " + username);
+        System.out.println("[ARTIFEX SMS OTP] Số điện thoại nhận SMS: " + domesticPhone);
+        System.out.println("[ARTIFEX SMS OTP] MA XAC THUC OTP (5 phut): " + otpCode);
+        System.out.println("[ARTIFEX SMS OTP] Trang thai Gateway (TextBee): " + (gatewaySent ? "DA GUI SMS THAT VE SIM DIEN THOAI" : "LUU TAM VA IN CONSOLE"));
+        System.out.println("==================================================================");
+
+        String masked = maskContactInfo(domesticPhone);
+        response.put("status", "SUCCESS");
+        response.put("message", "Đã gửi mã xác thực OTP tới số " + masked + ". Vui lòng kiểm tra tin nhắn SMS!");
+        return ResponseEntity.ok(response);
     }
 
+    /**
+     * Bước 2 Đăng ký: Xác thực mã OTP và hoàn tất lưu tài khoản mới vào cơ sở dữ liệu.
+     */
     @PostMapping("/register")
     public ResponseEntity<Map<String, Object>> register(@RequestBody RegisterRequest request) {
         Map<String, Object> response = new LinkedHashMap<>();
 
-        if (request.getUsername() == null || request.getUsername().trim().isEmpty() ||
-            request.getEmail() == null || request.getEmail().trim().isEmpty() ||
-            request.getPassword() == null || request.getPassword().trim().isEmpty() ||
-            request.getFullName() == null || request.getFullName().trim().isEmpty()) {
+        String username = request.getUsername() != null ? request.getUsername().trim() : "";
+        String fullName = request.getFullName() != null ? request.getFullName().trim() : "";
+        String phone = request.getPhone() != null ? request.getPhone().trim() : "";
+        String password = request.getPassword() != null ? request.getPassword() : "";
+        String otpInput = request.getOtp() != null ? request.getOtp().trim() : "";
+
+        if (username.isEmpty() || fullName.isEmpty() || phone.isEmpty() || password.isEmpty()) {
             response.put("status", "ERROR");
             response.put("message", "Vui lòng nhập đầy đủ thông tin bắt buộc!");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
-        if (userRepository.existsByUsername(request.getUsername().trim())) {
+        if (password.length() < 6) {
+            response.put("status", "ERROR");
+            response.put("message", "Mật khẩu phải có ít nhất 6 ký tự!");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+
+        if (userRepository.existsByUsername(username)) {
             response.put("status", "ERROR");
             response.put("message", "Tên đăng nhập đã tồn tại!");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
-        if (userRepository.existsByEmail(request.getEmail().trim())) {
+        String domesticPhone = toDomesticVietnamPhone(phone);
+        String storageKey = "reg:" + domesticPhone;
+        OtpRecord record = otpStorage.get(storageKey);
+
+        if (record == null) {
             response.put("status", "ERROR");
-            response.put("message", "Email đã được sử dụng!");
+            response.put("message", "Chưa có yêu cầu gửi mã OTP hoặc mã đã hết hạn. Vui lòng nhận lại mã OTP!");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+
+        if (System.currentTimeMillis() > record.expiresAt) {
+            otpStorage.remove(storageKey);
+            response.put("status", "ERROR");
+            response.put("message", "Mã OTP đã hết hạn (quá 5 phút), vui lòng gửi lại mã mới!");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+
+        if (!record.otpCode.equals(otpInput)) {
+            response.put("status", "ERROR");
+            response.put("message", "Mã xác thực OTP không chính xác!");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+
+        // Mã OTP hợp lệ -> Xóa khỏi kho lưu
+        otpStorage.remove(storageKey);
+
+        // Kiểm tra và bắt buộc Email phải có định dạng @gmail.com
+        String email = request.getEmail() != null ? request.getEmail().trim().toLowerCase() : "";
+        if (email.isEmpty()) {
+            response.put("status", "ERROR");
+            response.put("message", "Vui lòng nhập địa chỉ Email (@gmail.com)!");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+        if (!email.endsWith("@gmail.com")) {
+            response.put("status", "ERROR");
+            response.put("message", "Email phải có định dạng @gmail.com!");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+        if (userRepository.existsByEmail(email)) {
+            response.put("status", "ERROR");
+            response.put("message", "Email này đã được sử dụng cho một tài khoản khác!");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
         User newUser = User.builder()
-                .username(request.getUsername().trim())
-                .email(request.getEmail().trim().toLowerCase())
-                .password(request.getPassword())
-                .fullName(request.getFullName().trim())
-                .phone(request.getPhone() != null && !request.getPhone().trim().isEmpty() ? request.getPhone().trim() : null)
+                .username(username)
+                .email(email)
+                .password(password)
+                .fullName(fullName)
+                .phone(domesticPhone)
                 .address(request.getAddress() != null ? request.getAddress().trim() : null)
                 .avatarUrl("https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80")
                 .role("USER")
@@ -214,7 +311,6 @@ public class AuthController {
 
     /**
      * Bước 1: Xác minh Số điện thoại (hoặc Tên đăng nhập + Số điện thoại) và gửi tin nhắn SMS OTP 6 chữ số.
-     * Hỗ trợ bất kỳ ai nhập số điện thoại của chính họ (kể cả khi chưa nhớ username hoặc test số mới) đều nhận được SMS thật.
      */
     @PostMapping("/forgot-password/send-otp")
     public ResponseEntity<Map<String, Object>> requestForgotPasswordOtp(@RequestBody ForgotPasswordOtpRequest request) {
@@ -223,7 +319,6 @@ public class AuthController {
         String usernameInput = request.getUsername() != null ? request.getUsername().trim() : "";
         String contactInput = request.getEmailOrPhone() != null ? request.getEmailOrPhone().trim() : "";
 
-        // Nếu người dùng nhập SĐT vào ô đầu tiên và để trống ô thứ hai -> tự động hiểu là tìm theo SĐT
         if (contactInput.isEmpty() && !usernameInput.isEmpty()) {
             contactInput = usernameInput;
         }
@@ -237,7 +332,6 @@ public class AuthController {
         boolean isPhoneFormat = isPhoneNumber(contactInput);
         Optional<User> userOpt = Optional.empty();
 
-        // 1. Tìm theo username hoặc email nếu có nhập
         if (!usernameInput.isEmpty()) {
             userOpt = userRepository.findByUsername(usernameInput);
             if (userOpt.isEmpty()) {
@@ -248,7 +342,6 @@ public class AuthController {
             }
         }
 
-        // 2. Nếu chưa tìm thấy, tìm theo Số điện thoại hoặc Email ở ô liên hệ
         if (userOpt.isEmpty()) {
             if (isPhoneFormat) {
                 userOpt = findUserByNormalizedPhone(contactInput);
@@ -257,7 +350,6 @@ public class AuthController {
             }
         }
 
-        // 3. Nếu người dùng / giảng viên nhập một SĐT mới chưa từng đăng ký -> tự động khởi tạo tài khoản theo SĐT đó để nhận SMS ngay
         User user;
         if (userOpt.isEmpty()) {
             if (!isPhoneFormat) {
@@ -269,9 +361,9 @@ public class AuthController {
             String generatedUsername = (!usernameInput.isEmpty() && !isPhoneNumber(usernameInput) && !userRepository.existsByUsername(usernameInput))
                     ? usernameInput
                     : ("user_" + domesticPhone);
-            String generatedEmail = generatedUsername.toLowerCase() + "@artifex.vn";
+            String generatedEmail = generatedUsername.toLowerCase() + "@artifex.local";
             if (userRepository.existsByEmail(generatedEmail)) {
-                generatedEmail = generatedUsername.toLowerCase() + "_" + (System.currentTimeMillis() % 1000) + "@artifex.vn";
+                generatedEmail = generatedUsername.toLowerCase() + "_" + (System.currentTimeMillis() % 1000) + "@artifex.local";
             }
 
             User newUser = User.builder()
@@ -289,8 +381,6 @@ public class AuthController {
         }
 
         boolean emailMatched = user.getEmail() != null && user.getEmail().equalsIgnoreCase(contactInput);
-
-        // Nếu người dùng/giảng viên nhập một SĐT hợp lệ -> chấp nhận và cập nhật SĐT nhận SMS cho tài khoản
         boolean phoneMatched = false;
         if (isPhoneFormat) {
             phoneMatched = true;
@@ -309,11 +399,9 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
-        // Sinh mã OTP 6 chữ số ngẫu nhiên (100000 -> 999999)
         String otpCode = String.format("%06d", ThreadLocalRandom.current().nextInt(100000, 1000000));
         otpStorage.put(user.getUsername().toLowerCase(), new OtpRecord(otpCode, System.currentTimeMillis() + OTP_EXPIRATION_MS));
 
-        // Xác định số điện thoại nhận SMS (ưu tiên SĐT vừa nhập hoặc SĐT lưu trong hồ sơ)
         String targetPhone = isPhoneFormat ? toDomesticVietnamPhone(contactInput) : (user.getPhone() != null ? user.getPhone().trim() : "");
         boolean gatewaySent = false;
         if (!targetPhone.isEmpty()) {
@@ -323,6 +411,7 @@ public class AuthController {
         String maskedContact = maskContactInfo(!targetPhone.isEmpty() ? targetPhone : contactInput);
 
         System.out.println("==================================================================");
+        System.out.println("[ARTIFEX SMS OTP] KHOI PHUC MAT KHAU");
         System.out.println("[ARTIFEX SMS OTP] Tai khoan: " + user.getUsername());
         System.out.println("[ARTIFEX SMS OTP] So dien thoai nhan SMS that: " + (!targetPhone.isEmpty() ? targetPhone : contactInput));
         System.out.println("[ARTIFEX SMS OTP] Ma xac thuc OTP (hieu luc 5 phut): " + otpCode);
@@ -398,7 +487,6 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
-        // Xác thực OTP hợp lệ -> Cập nhật mật khẩu mới, xóa OTP đã dùng và trả về user để tự động đăng nhập
         user.setPassword(newPassword);
         User savedUser = userRepository.save(user);
         otpStorage.remove(key);
@@ -473,9 +561,11 @@ public class AuthController {
      * Gửi tin nhắn SMS thật tới số điện thoại người dùng qua TextBee.dev
      * (Biến điện thoại Android có SIM thành trạm phát SMS thật tới mọi số điện thoại).
      */
-    private boolean sendRealSmsViaGateway(String rawPhone, String otpCode) {
+    private boolean sendRealSmsViaGateway(String rawPhone, String otpCode, String customMessage) {
         String domesticPhone = toDomesticVietnamPhone(rawPhone);
-        String smsContent = "[ARTIFEX PC] Ma xac thuc OTP khoi phuc mat khau cua ban la: " + otpCode + " (Hieu luc 5 phut). Tuyet doi khong chia se ma nay!";
+        String smsContent = (customMessage != null && !customMessage.isBlank())
+                ? customMessage
+                : "[ARTIFEX PC] Ma xac thuc OTP cua ban la: " + otpCode + " (Hieu luc 5 phut). Tuyet doi khong chia se ma nay!";
 
         HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
@@ -512,30 +602,7 @@ public class AuthController {
         return false;
     }
 
-    private String resolveAdbExecutable() {
-        List<String> candidates = new ArrayList<>();
-        String localAppData = System.getenv("LOCALAPPDATA");
-        if (localAppData != null && !localAppData.isBlank()) {
-            candidates.add(localAppData + File.separator + "Android" + File.separator + "Sdk" + File.separator + "platform-tools" + File.separator + "adb.exe");
-        }
-        String userProfile = System.getenv("USERPROFILE");
-        if (userProfile != null && !userProfile.isBlank()) {
-            candidates.add(userProfile + File.separator + "AppData" + File.separator + "Local" + File.separator + "Android" + File.separator + "Sdk" + File.separator + "platform-tools" + File.separator + "adb.exe");
-        }
-        String androidHome = System.getenv("ANDROID_HOME");
-        if (androidHome != null && !androidHome.isBlank()) {
-            candidates.add(androidHome + File.separator + "platform-tools" + File.separator + "adb.exe");
-            candidates.add(androidHome + File.separator + "platform-tools" + File.separator + "adb");
-        }
-        for (String path : candidates) {
-            try {
-                File f = new File(path);
-                if (f.exists() && f.isFile()) {
-                    return f.getAbsolutePath();
-                }
-            } catch (Exception ignored) {
-            }
-        }
-        return "adb";
+    private boolean sendRealSmsViaGateway(String rawPhone, String otpCode) {
+        return sendRealSmsViaGateway(rawPhone, otpCode, null);
     }
 }
