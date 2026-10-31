@@ -7,7 +7,11 @@
     </base-config>
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">10.0.2.2</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        <domain includeSubdomains="true">192.168.1.73</domain>
         <domain includeSubdomains="true">192.168.102.100</domain>
+        <domain includeSubdomains="true">192.168.1.246</domain>
+        <domain includeSubdomains="true">192.168.1.52</domain>
         <domain includeSubdomains="true">localhost</domain>
     </domain-config>
 </network-security-config>

@@ -52,6 +52,15 @@ public class UserController {
         }
 
         User user = userOpt.get();
+        if (request.getEmail() != null && !request.getEmail().trim().isEmpty()) {
+            String newEmail = request.getEmail().trim().toLowerCase();
+            if (!newEmail.equals(user.getEmail()) && userRepository.existsByEmail(newEmail)) {
+                response.put("status", "ERROR");
+                response.put("message", "Email đã được sử dụng bởi tài khoản khác!");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
+            user.setEmail(newEmail);
+        }
         if (request.getFullName() != null && !request.getFullName().trim().isEmpty()) {
             user.setFullName(request.getFullName().trim());
         }
@@ -60,6 +69,12 @@ public class UserController {
         }
         if (request.getAddress() != null) {
             user.setAddress(request.getAddress().trim());
+        }
+        if (request.getDateOfBirth() != null) {
+            user.setDateOfBirth(request.getDateOfBirth().trim());
+        }
+        if (request.getGender() != null) {
+            user.setGender(request.getGender().trim());
         }
 
         User updatedUser = userRepository.save(user);
