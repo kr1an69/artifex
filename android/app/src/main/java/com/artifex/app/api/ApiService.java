@@ -6,11 +6,13 @@ import retrofit2.http.GET;
 
 public interface ApiService {
 
-    // Endpoint kiểm tra kết nối tới Spring Boot backend
     @GET("api/health")
     Call<ResponseBody> checkHealth();
 
     // ==================== AUTH & USER APIS (Khoa) ====================
+    @retrofit2.http.POST("api/auth/register/send-otp")
+    retrofit2.Call<java.util.Map<String, Object>> sendRegisterOtp(@retrofit2.http.Body java.util.Map<String, Object> body);
+
     @retrofit2.http.POST("api/auth/register")
     retrofit2.Call<java.util.Map<String, Object>> register(@retrofit2.http.Body java.util.Map<String, Object> body);
 
