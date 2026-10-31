@@ -14,19 +14,23 @@ import retrofit2.converter.gson.GsonConverterFactory;
 
 public class RetrofitClient {
 
-    // 10.0.2.2 là IP cầu nối mặc định của Máy ảo Android trỏ thẳng vào localhost:8080 của máy tính
-    private static final String BASE_URL = "http://10.0.2.2:8080/";
+    // 127.0.0.1 (thông qua adb reverse) là đường truyền tối ưu:
+    // - Kết nối trực tiếp máy chủ trong <1ms
+    // - Miễn nhiễm hoàn toàn với việc đổi Wi-Fi (ở nhà, ở trường NLU-SV, quán cà phê)
+    // - Không bị lỗi xung đột dải mạng 10.x.x.x của Wi-Fi trường đại học
+    // - Vượt qua được tường lửa Windows Defender chặn kết nối vào
+    private static final String BASE_URL = "http://127.0.0.1:8080/";
 
-    // Danh sách IP tự động dò tìm theo thứ tự ưu tiên:
-    // 1. 10.0.2.2 (Cầu nối chuẩn của Máy ảo Android)
-    // 2. 192.168.1.73 (IPv4 Wi-Fi hiện tại của Laptop)
-    // 3. 127.0.0.1 (Cầu nối adb reverse)
-    // 4. 192.168.1.52 (IPv4 Wi-Fi dự phòng cũ)
+    // Danh sách Host chuẩn:
+    // 1. "127.0.0.1" -> Chuẩn adb reverse (Máy ảo Android & máy thật cắm cáp USB)
+    // 2. "10.0.2.2"  -> Chuẩn mặc định của Google Android Emulator khi không dùng reverse
+    // 3. "10.0.3.2"  -> Cầu nối cho máy ảo Genymotion
+    // 4. "localhost" -> Cổng loopback nội bộ
     private static final String[] CANDIDATE_HOSTS = new String[]{
-            "10.0.2.2",
-            "192.168.1.73",
             "127.0.0.1",
-            "192.168.1.52"
+            "10.0.2.2",
+            "10.0.3.2",
+            "localhost"
     };
 
     private static volatile String lastWorkingHost = null;
@@ -57,7 +61,7 @@ public class RetrofitClient {
                         }
                     }
 
-                    // 2. Tự động thử lần lượt qua 10.0.2.2 -> 192.168.1.73 -> 127.0.0.1
+                    // 2. Tự động thử lần lượt qua 127.0.0.1 -> 10.0.2.2 -> 10.0.3.2 -> localhost
                     for (String host : CANDIDATE_HOSTS) {
                         if (host.equals(cachedHost)) continue;
                         try {
@@ -82,7 +86,7 @@ public class RetrofitClient {
             };
 
             OkHttpClient client = new OkHttpClient.Builder()
-                    .connectTimeout(5, TimeUnit.SECONDS)
+                    .connectTimeout(2, TimeUnit.SECONDS)
                     .readTimeout(15, TimeUnit.SECONDS)
                     .writeTimeout(15, TimeUnit.SECONDS)
                     .addInterceptor(fallbackInterceptor)
