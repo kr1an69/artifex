@@ -32,16 +32,7 @@
         android:textColor="@color/artifex_text_secondary"
         android:textSize="13sp" />
 
-    <!-- Danh sách các địa chỉ -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rvAddresses"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:maxHeight="360dp"
-        android:nestedScrollingEnabled="true" />
-
-    <!-- Nút Thêm địa chỉ mới -->
+    <!-- Nút Thêm địa chỉ mới (Đặt ở trên để luôn hiển thị rõ ràng, không bao giờ bị danh sách đẩy trôi) -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnAddNewAddress"
         android:layout_width="match_parent"
@@ -53,4 +44,12 @@
         android:textSize="14sp"
         android:textStyle="bold"
         app:cornerRadius="12dp" />
+
+    <!-- Danh sách các địa chỉ -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvAddresses"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:nestedScrollingEnabled="true" />
 </LinearLayout>

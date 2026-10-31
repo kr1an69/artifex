@@ -32,6 +32,12 @@ public class User {
 
     private String address;
 
+    @Column(name = "date_of_birth", length = 20)
+    private String dateOfBirth;
+
+    @Column(length = 20)
+    private String gender;
+
     @Column(name = "avatar_url", length = 500)
     private String avatarUrl;
 
