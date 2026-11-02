@@ -56,8 +56,8 @@ import retrofit2.Response;
 public class AuthFragment extends Fragment {
 
     private LinearLayout layoutAuthForm, layoutProfile;
-    private TextInputLayout tilFullName, tilUsername, tilEmail, tilPhone, tilPassword, tilConfirmPassword;
-    private TextInputEditText etFullName, etUsername, etEmail, etPhone, etPassword, etConfirmPassword;
+    private TextInputLayout tilFullName, tilEmail, tilPhone, tilPassword, tilConfirmPassword;
+    private TextInputEditText etFullName, etEmail, etPhone, etPassword, etConfirmPassword;
     private Button btnSubmitAuth, btnFirebaseAuth;
     private View btnLogout, btnChangePassword, cardShippingInfo;
     private View btnViewAllOrders, btnOrderPending, btnOrderProcessing, btnOrderShipping, btnOrderCompleted;
@@ -131,13 +131,11 @@ public class AuthFragment extends Fragment {
         layoutAuthForm = v.findViewById(R.id.layoutAuthForm);
         layoutProfile = v.findViewById(R.id.layoutProfile);
         tilFullName = v.findViewById(R.id.tilFullName);
-        tilUsername = v.findViewById(R.id.tilUsername);
         tilEmail = v.findViewById(R.id.tilEmail);
         tilPhone = v.findViewById(R.id.tilPhone);
         tilPassword = v.findViewById(R.id.tilPassword);
         tilConfirmPassword = v.findViewById(R.id.tilConfirmPassword);
         etFullName = v.findViewById(R.id.etFullName);
-        etUsername = v.findViewById(R.id.etUsername);
         etEmail = v.findViewById(R.id.etEmail);
         etPhone = v.findViewById(R.id.etPhone);
         etPassword = v.findViewById(R.id.etPassword);
@@ -283,12 +281,6 @@ public class AuthFragment extends Fragment {
                 tilEmail.setError(null);
                 tilEmail.setErrorEnabled(false);
             }
-            if (tilUsername != null) {
-                tilUsername.setHint("Tên đăng nhập");
-            }
-            if (etUsername != null) {
-                etUsername.setHint(null);
-            }
             if (tilPhone != null) {
                 tilPhone.setVisibility(View.VISIBLE);
             }
@@ -308,14 +300,8 @@ public class AuthFragment extends Fragment {
                 tilEmail.setError(null);
                 tilEmail.setErrorEnabled(false);
             }
-            if (tilUsername != null) {
-                tilUsername.setHint("Tên đăng nhập hoặc Số điện thoại");
-            }
-            if (etUsername != null) {
-                etUsername.setHint(null);
-            }
             if (tilPhone != null) {
-                tilPhone.setVisibility(View.GONE);
+                tilPhone.setVisibility(View.VISIBLE);
             }
             if (tilConfirmPassword != null) {
                 tilConfirmPassword.setVisibility(View.GONE);
@@ -549,17 +535,17 @@ public class AuthFragment extends Fragment {
     }
 
     private void handleLogin() {
-        String username = etUsername.getText() != null ? etUsername.getText().toString().trim() : "";
+        String phone = etPhone.getText() != null ? etPhone.getText().toString().trim() : "";
         String password = etPassword.getText() != null ? etPassword.getText().toString().trim() : "";
 
-        if (username.isEmpty() || password.isEmpty()) {
-            Toast.makeText(requireContext(), "Vui lòng nhập tài khoản và mật khẩu", Toast.LENGTH_SHORT).show();
+        if (normalizeLoginPhone(phone).isEmpty() || password.isEmpty()) {
+            Toast.makeText(requireContext(), "Vui lòng nhập số điện thoại hợp lệ và mật khẩu", Toast.LENGTH_SHORT).show();
             return;
         }
 
         progressBar.setVisibility(View.VISIBLE);
         Map<String, Object> body = new HashMap<>();
-        body.put("usernameOrEmail", username);
+        body.put("phone", normalizeLoginPhone(phone));
         body.put("password", password);
 
         apiService.login(body).enqueue(new Callback<Map<String, Object>>() {
@@ -591,6 +577,13 @@ public class AuthFragment extends Fragment {
         });
     }
 
+    private String normalizeLoginPhone(String rawPhone) {
+        String phone = rawPhone.trim().replaceAll("[\\s.()\\-]", "");
+        if (phone.startsWith("+84")) phone = "0" + phone.substring(3);
+        else if (phone.startsWith("84")) phone = "0" + phone.substring(2);
+        return phone.matches("0[35789][0-9]{8}") ? phone : "";
+    }
+
     private boolean isValidGmail(String email) {
         if (email == null) return false;
         String trimmed = email.trim().toLowerCase();
@@ -599,14 +592,13 @@ public class AuthFragment extends Fragment {
 
     private void handleRegister() {
         String fullName = etFullName.getText() != null ? etFullName.getText().toString().trim() : "";
-        String username = etUsername.getText() != null ? etUsername.getText().toString().trim() : "";
         String email = etEmail.getText() != null ? etEmail.getText().toString().trim().toLowerCase() : "";
         String phone = (etPhone != null && etPhone.getText() != null) ? etPhone.getText().toString().trim() : "";
         String password = etPassword.getText() != null ? etPassword.getText().toString().trim() : "";
         String confirmPassword = (etConfirmPassword != null && etConfirmPassword.getText() != null)
                 ? etConfirmPassword.getText().toString().trim() : "";
 
-        if (fullName.isEmpty() || username.isEmpty() || email.isEmpty() || phone.isEmpty() || password.isEmpty() || confirmPassword.isEmpty()) {
+        if (fullName.isEmpty() || email.isEmpty() || phone.isEmpty() || password.isEmpty() || confirmPassword.isEmpty()) {
             Toast.makeText(requireContext(), "Vui lòng nhập đầy đủ tất cả thông tin!", Toast.LENGTH_SHORT).show();
             if (email.isEmpty() && tilEmail != null) {
                 tilEmail.setError("Vui lòng nhập địa chỉ Gmail!");
@@ -627,7 +619,7 @@ public class AuthFragment extends Fragment {
             }
         }
 
-        String cleanPhone = phone.replaceAll("[^0-9]", "");
+        String cleanPhone = normalizeLoginPhone(phone);
         if (cleanPhone.length() != 10 || !cleanPhone.startsWith("0")) {
             Toast.makeText(requireContext(), "Số điện thoại không hợp lệ! Vui lòng nhập đúng 10 số (ví dụ: 09xxxxxxxx) để nhận SMS OTP.", Toast.LENGTH_SHORT).show();
             return;
@@ -648,7 +640,6 @@ public class AuthFragment extends Fragment {
         btnSubmitAuth.setEnabled(false);
 
         Map<String, Object> reqBody = new HashMap<>();
-        reqBody.put("username", username);
         reqBody.put("phone", cleanPhone);
         reqBody.put("email", email);
 
@@ -661,7 +652,7 @@ public class AuthFragment extends Fragment {
                 if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
                     String msg = (String) response.body().get("message");
                     Toast.makeText(requireContext(), msg != null ? msg : "Đã gửi mã xác thực OTP qua tin nhắn SMS!", Toast.LENGTH_LONG).show();
-                    showRegisterOtpDialog(fullName, username, email, cleanPhone, password);
+                    showRegisterOtpDialog(fullName, email, cleanPhone, password);
                 } else {
                     String errorMsg = extractErrorMessage(response, "Gửi mã OTP thất bại!");
                     Toast.makeText(requireContext(), errorMsg, Toast.LENGTH_LONG).show();
@@ -679,7 +670,6 @@ public class AuthFragment extends Fragment {
 
     private void showRegisterOtpDialog(
             String fullName,
-            String username,
             String email,
             String phone,
             String password) {
@@ -741,7 +731,6 @@ public class AuthFragment extends Fragment {
             btnResendOtp.setOnClickListener(v -> {
                 btnResendOtp.setEnabled(false);
                 Map<String, Object> reqBody = new HashMap<>();
-                reqBody.put("username", username);
                 reqBody.put("phone", phone);
                 reqBody.put("email", email);
 
@@ -779,7 +768,6 @@ public class AuthFragment extends Fragment {
 
             Map<String, Object> regBody = new HashMap<>();
             regBody.put("fullName", fullName);
-            regBody.put("username", username);
             regBody.put("email", email);
             regBody.put("phone", phone);
             regBody.put("password", password);
@@ -910,7 +898,7 @@ public class AuthFragment extends Fragment {
         Button btnCancel = dialogView.findViewById(R.id.btnCancelFirebaseDialog);
         Button btnSubmit = dialogView.findViewById(R.id.btnSubmitFirebaseDialog);
 
-        String typedUser = etUsername.getText() != null ? etUsername.getText().toString().trim() : "";
+        String typedUser = etPhone.getText() != null ? etPhone.getText().toString().trim() : "";
         String typedEmail = etEmail.getText() != null ? etEmail.getText().toString().trim() : "";
         String typedPass = etPassword.getText() != null ? etPassword.getText().toString().trim() : "";
 
@@ -1016,7 +1004,6 @@ public class AuthFragment extends Fragment {
         LinearLayout layoutStep2 = dialogView.findViewById(R.id.layoutForgotStep2);
 
         // Các View Bước 1
-        TextInputEditText etForgotUsername = dialogView.findViewById(R.id.etForgotUsername);
         TextInputEditText etForgotContact = dialogView.findViewById(R.id.etForgotContact);
         Button btnCancelStep1 = dialogView.findViewById(R.id.btnCancelForgotStep1);
         Button btnRequestOtp = dialogView.findViewById(R.id.btnRequestOtp);
@@ -1030,32 +1017,29 @@ public class AuthFragment extends Fragment {
         Button btnSubmitForgotPass = dialogView.findViewById(R.id.btnSubmitForgotPass);
 
         // Tự động điền nếu người dùng đã gõ sẵn tài khoản ở màn hình đăng nhập
-        String typedUsername = etUsername.getText() != null ? etUsername.getText().toString().trim() : "";
-        if (!typedUsername.isEmpty()) {
-            etForgotUsername.setText(typedUsername);
+        String typedPhone = etPhone.getText() != null ? etPhone.getText().toString().trim() : "";
+        if (!typedPhone.isEmpty()) {
+            etForgotContact.setText(typedPhone);
         }
 
-        final String[] verifiedUsernameHolder = new String[]{""};
+        final String[] verifiedPhoneHolder = new String[]{""};
 
         btnCancelStep1.setOnClickListener(v -> dialog.dismiss());
 
         // BƯỚC 1: Bấm "Gửi SMS OTP"
         btnRequestOtp.setOnClickListener(v -> {
-            final String usernameInput = etForgotUsername.getText() != null ? etForgotUsername.getText().toString().trim() : "";
-            final String rawContactInput = etForgotContact.getText() != null ? etForgotContact.getText().toString().trim() : "";
-
-            if (rawContactInput.isEmpty() && usernameInput.isEmpty()) {
-                Toast.makeText(requireContext(), "Vui lòng nhập Số điện thoại để nhận tin nhắn SMS OTP!", Toast.LENGTH_SHORT).show();
+            final String contactInput = normalizeLoginPhone(etForgotContact.getText() != null
+                    ? etForgotContact.getText().toString() : "");
+            if (contactInput.isEmpty()) {
+                Toast.makeText(requireContext(), "Vui lòng nhập số điện thoại hợp lệ!", Toast.LENGTH_SHORT).show();
                 return;
             }
-            final String contactInput = rawContactInput.isEmpty() ? usernameInput : rawContactInput;
 
             progressBar.setVisibility(View.VISIBLE);
             btnRequestOtp.setEnabled(false);
 
             Map<String, Object> body = new HashMap<>();
-            body.put("username", usernameInput);
-            body.put("emailOrPhone", contactInput);
+            body.put("phone", contactInput);
 
             apiService.requestForgotPasswordOtp(body).enqueue(new Callback<Map<String, Object>>() {
                 @Override
@@ -1064,14 +1048,12 @@ public class AuthFragment extends Fragment {
                     btnRequestOtp.setEnabled(true);
 
                     if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
-                        String resolvedUser = response.body().get("username") != null
-                                ? String.valueOf(response.body().get("username"))
-                                : usernameInput;
+                        String resolvedUser = contactInput;
                         String maskedContact = response.body().get("maskedContact") != null
                                 ? String.valueOf(response.body().get("maskedContact"))
                                 : contactInput;
 
-                        verifiedUsernameHolder[0] = resolvedUser;
+                        verifiedPhoneHolder[0] = resolvedUser;
 
                         // Chuyển sang giao diện Bước 2 (Chỉ gửi tin nhắn SMS về điện thoại thật, KHÔNG hiển thị trên máy ảo)
                         layoutStep1.setVisibility(View.GONE);
@@ -1136,7 +1118,7 @@ public class AuthFragment extends Fragment {
             btnSubmitForgotPass.setEnabled(false);
 
             Map<String, Object> body = new HashMap<>();
-            body.put("username", verifiedUsernameHolder[0]);
+            body.put("phone", verifiedPhoneHolder[0]);
             body.put("otp", otpInput);
             body.put("newPassword", newPass);
 
@@ -1148,7 +1130,7 @@ public class AuthFragment extends Fragment {
 
                     if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
                         dialog.dismiss();
-                        etUsername.setText(verifiedUsernameHolder[0]);
+                        etPhone.setText(verifiedPhoneHolder[0]);
                         etPassword.setText(newPass);
 
                         if (response.body().get("user") instanceof Map) {
