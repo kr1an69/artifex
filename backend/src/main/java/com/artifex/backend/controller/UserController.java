@@ -54,6 +54,11 @@ public class UserController {
         User user = userOpt.get();
         if (request.getEmail() != null && !request.getEmail().trim().isEmpty()) {
             String newEmail = request.getEmail().trim().toLowerCase();
+            if (!newEmail.endsWith("@gmail.com")) {
+                response.put("status", "ERROR");
+                response.put("message", "Email phải có định dạng @gmail.com!");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
             if (!newEmail.equals(user.getEmail()) && userRepository.existsByEmail(newEmail)) {
                 response.put("status", "ERROR");
                 response.put("message", "Email đã được sử dụng bởi tài khoản khác!");
@@ -64,8 +69,23 @@ public class UserController {
         if (request.getFullName() != null && !request.getFullName().trim().isEmpty()) {
             user.setFullName(request.getFullName().trim());
         }
-        if (request.getPhone() != null) {
-            user.setPhone(request.getPhone().trim());
+        if (request.getPhone() != null && !request.getPhone().trim().isEmpty()) {
+            String rawPhone = request.getPhone().trim();
+            if (!isPhoneNumber(rawPhone)) {
+                response.put("status", "ERROR");
+                response.put("message", "Số điện thoại không hợp lệ! Vui lòng nhập đúng 10 số (ví dụ: 09xxxxxxxx).");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
+            String domesticPhone = toDomesticVietnamPhone(rawPhone);
+            String targetNorm = normalizeVietnamPhone(rawPhone);
+            boolean phoneTaken = userRepository.findAll().stream()
+                    .anyMatch(u -> !u.getId().equals(id) && u.getPhone() != null && normalizeVietnamPhone(u.getPhone()).equals(targetNorm));
+            if (phoneTaken) {
+                response.put("status", "ERROR");
+                response.put("message", "Số điện thoại này đã được sử dụng bởi tài khoản khác!");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
+            user.setPhone(domesticPhone);
         }
         if (request.getAddress() != null) {
             user.setAddress(request.getAddress().trim());
@@ -158,5 +178,43 @@ public class UserController {
         response.put("status", "SUCCESS");
         response.put("message", "Đổi mật khẩu thành công!");
         return ResponseEntity.ok(response);
+    }
+
+    // ==================== HÀM HỖ TRỢ XỬ LÝ SỐ ĐIỆN THOẠI VIỆT NAM ====================
+
+    private boolean isPhoneNumber(String input) {
+        if (input == null) return false;
+        String cleaned = input.replaceAll("[\\s\\-\\.\\(\\)]", "");
+        return cleaned.matches("^(\\+?840?|0)[35789]\\d{8}$");
+    }
+
+    private String normalizeVietnamPhone(String rawPhone) {
+        if (rawPhone == null) return "";
+        String cleaned = rawPhone.replaceAll("[^0-9+]", "");
+        if (cleaned.startsWith("+840")) {
+            return "+84" + cleaned.substring(4);
+        }
+        if (cleaned.startsWith("840") && cleaned.length() == 12) {
+            return "+84" + cleaned.substring(3);
+        }
+        if (cleaned.startsWith("0")) {
+            return "+84" + cleaned.substring(1);
+        }
+        if (cleaned.startsWith("84")) {
+            return "+" + cleaned;
+        }
+        if (!cleaned.startsWith("+") && !cleaned.isEmpty()) {
+            return "+" + cleaned;
+        }
+        return cleaned;
+    }
+
+    private String toDomesticVietnamPhone(String rawPhone) {
+        if (rawPhone == null) return "";
+        String e164 = normalizeVietnamPhone(rawPhone);
+        if (e164.startsWith("+84")) {
+            return "0" + e164.substring(3);
+        }
+        return rawPhone.replaceAll("[^0-9]", "");
     }
 }
