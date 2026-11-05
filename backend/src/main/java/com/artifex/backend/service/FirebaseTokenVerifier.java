@@ -17,6 +17,9 @@ public class FirebaseTokenVerifier {
     private final String projectId;
     private FirebaseAuth auth;
 
+    @Value("${GOOGLE_APPLICATION_CREDENTIALS:}")
+    private String credentialsPath = "";
+
     public FirebaseTokenVerifier(@Value("${firebase.project-id:}") String projectId) {
         this.projectId = projectId;
     }
@@ -30,9 +33,17 @@ public class FirebaseTokenVerifier {
                     "Máy chủ chưa được cấu hình xác thực Firebase thật.");
         }
         try {
+            GoogleCredentials credentials;
+            if (credentialsPath.isBlank()) {
+                credentials = GoogleCredentials.getApplicationDefault();
+            } else {
+                try (var input = java.nio.file.Files.newInputStream(java.nio.file.Path.of(credentialsPath))) {
+                    credentials = GoogleCredentials.fromStream(input);
+                }
+            }
             FirebaseOptions options = FirebaseOptions.builder()
                     .setProjectId(projectId.trim())
-                    .setCredentials(GoogleCredentials.getApplicationDefault()).build();
+                    .setCredentials(credentials).build();
             auth = FirebaseAuth.getInstance(FirebaseApp.initializeApp(options, "artifex-auth"));
             return auth;
         } catch (IOException | IllegalArgumentException | IllegalStateException e) {

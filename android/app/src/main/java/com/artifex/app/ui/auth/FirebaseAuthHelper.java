@@ -12,7 +12,7 @@ import androidx.credentials.CustomCredential;
 import androidx.credentials.GetCredentialRequest;
 import androidx.credentials.GetCredentialResponse;
 import androidx.credentials.exceptions.GetCredentialException;
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption;
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption;
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
@@ -48,9 +48,8 @@ public final class FirebaseAuthHelper {
             callback.onError("Đăng nhập Google chưa được cấu hình. Vui lòng liên hệ nhóm phát triển.");
             return;
         }
-        GetGoogleIdOption option = new GetGoogleIdOption.Builder()
-                .setServerClientId(activity.getString(resource))
-                .setFilterByAuthorizedAccounts(false).setAutoSelectEnabled(false).build();
+        GetSignInWithGoogleOption option = new GetSignInWithGoogleOption.Builder(
+                activity.getString(resource)).build();
         GetCredentialRequest request = new GetCredentialRequest.Builder().addCredentialOption(option).build();
         CredentialManager.create(activity).getCredentialAsync(activity, request, cancellation,
                 ContextCompat.getMainExecutor(activity),
