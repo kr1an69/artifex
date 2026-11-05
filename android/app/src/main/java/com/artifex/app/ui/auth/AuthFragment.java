@@ -1,10 +1,8 @@
 package com.artifex.app.ui.auth;
 
-import android.accounts.AccountManager;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
-import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -86,25 +84,6 @@ public class AuthFragment extends Fragment {
                     Uri selectedImageUri = result.getData().getData();
                     if (selectedImageUri != null) {
                         uploadAvatarToCloudinary(selectedImageUri);
-                    }
-                }
-            }
-    );
-
-    // Launcher mở màn hình Chọn tài khoản / Đăng nhập Google thật của hệ điều hành Android (Google Play Services)
-    private final ActivityResultLauncher<Intent> googleAccountPickerLauncher = registerForActivityResult(
-            new ActivityResultContracts.StartActivityForResult(),
-            result -> {
-                if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
-                    String googleEmail = result.getData().getStringExtra(AccountManager.KEY_ACCOUNT_NAME);
-                    if (googleEmail != null && !googleEmail.trim().isEmpty()) {
-                        String cleanEmail = googleEmail.trim().toLowerCase();
-                        String defaultName = cleanEmail.contains("@") ? cleanEmail.split("@")[0] : cleanEmail;
-                        String generatedUid = "google_uid_" + Math.abs(cleanEmail.hashCode());
-
-                        // Đồng bộ ngầm lên Firebase Auth (nếu đã cấu hình Firebase) rồi lưu vào MySQL
-                        FirebaseAuthHelper.syncUserToFirebaseSilently(requireContext(), cleanEmail, "GoogleAuth@123", defaultName);
-                        syncFirebaseUserToBackend(generatedUid, cleanEmail, defaultName, "", true);
                     }
                 }
             }
@@ -557,10 +536,6 @@ public class AuthFragment extends Fragment {
                     Map<String, Object> userMap = (Map<String, Object>) response.body().get("user");
                     saveUserDataToPref(userMap);
 
-                    // Đồng bộ ngầm tài khoản lên Firebase Authentication để luôn có session Firebase thật
-                    String resolvedEmail = (String) userMap.get("email");
-                    String resolvedName = (String) userMap.get("fullName");
-                    FirebaseAuthHelper.syncUserToFirebaseSilently(requireContext(), resolvedEmail, password, resolvedName);
 
                     checkLoginState();
                     Toast.makeText(requireContext(), "Đăng nhập thành công!", Toast.LENGTH_SHORT).show();
@@ -787,8 +762,6 @@ public class AuthFragment extends Fragment {
                         Map<String, Object> userMap = (Map<String, Object>) response.body().get("user");
                         saveUserDataToPref(userMap);
 
-                        // Đồng bộ với Firebase Auth
-                        FirebaseAuthHelper.syncUserToFirebaseSilently(requireContext(), email, password, fullName);
 
                         checkLoginState();
                         Toast.makeText(requireContext(), "Đăng ký tài khoản và xác thực số điện thoại thành công!", Toast.LENGTH_LONG).show();
@@ -840,152 +813,83 @@ public class AuthFragment extends Fragment {
         return defaultMsg;
     }
 
-                private void handleFirebaseLogin() {
-        // Trường hợp 1: Nếu đã điền khóa Firebase OAuth, mở luồng Firebase OAuthProvider("google.com")
-        if (FirebaseAuthHelper.isFirebaseConfigured(requireContext())) {
-            progressBar.setVisibility(View.VISIBLE);
-            FirebaseAuthHelper.signInWithRealGooglePopup(requireActivity(), new FirebaseAuthHelper.FirebaseAuthCallback() {
-                @Override
-                public void onSuccess(String firebaseUid, String email, String fullName, String avatarUrl, boolean isRealFirebaseSession) {
-                    syncFirebaseUserToBackend(firebaseUid, email, fullName, avatarUrl, isRealFirebaseSession);
-                }
+    private android.os.CancellationSignal googleSignInCancellation;
+    private Call<Map<String, Object>> firebaseLoginCall;
+    private int firebaseAttempt;
 
-                @Override
-                public void onError(String errorMessage) {
-                    progressBar.setVisibility(View.GONE);
-                    launchSystemGoogleAccountPicker();
-                }
-            });
-            return;
-        }
-
-        // Trường hợp 2 (Mặc định chạy ngay không cần tạo key):
-        // Gọi trực tiếp màn hình Chọn tài khoản / Đăng nhập Google thật của Google Play Services trên máy!
-        launchSystemGoogleAccountPicker();
-    }
-
-    private void launchSystemGoogleAccountPicker() {
-        try {
-            Intent googlePickerIntent = AccountManager.newChooseAccountIntent(
-                    null,
-                    null,
-                    new String[]{"com.google"},
-                    null,
-                    null,
-                    null,
-                    null
-            );
-            googleAccountPickerLauncher.launch(googlePickerIntent);
-        } catch (ActivityNotFoundException e) {
-            // Chỉ khi máy ảo không cài Google Play Services mới mở Dialog dự phòng
-            showFirebaseAuthDialog();
-        }
-    }
-
-    private void showFirebaseAuthDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
-        View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_firebase_auth, null);
-        builder.setView(dialogView);
-
-        AlertDialog dialog = builder.create();
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
-        }
-
-        TextInputEditText etFbEmail = dialogView.findViewById(R.id.etFirebaseEmail);
-        TextInputEditText etFbPassword = dialogView.findViewById(R.id.etFirebasePassword);
-        TextInputEditText etFbFullName = dialogView.findViewById(R.id.etFirebaseFullName);
-        Button btnCancel = dialogView.findViewById(R.id.btnCancelFirebaseDialog);
-        Button btnSubmit = dialogView.findViewById(R.id.btnSubmitFirebaseDialog);
-
-        String typedUser = etPhone.getText() != null ? etPhone.getText().toString().trim() : "";
-        String typedEmail = etEmail.getText() != null ? etEmail.getText().toString().trim() : "";
-        String typedPass = etPassword.getText() != null ? etPassword.getText().toString().trim() : "";
-
-        if (!typedEmail.isEmpty()) {
-            etFbEmail.setText(typedEmail);
-        } else if (typedUser.contains("@")) {
-            etFbEmail.setText(typedUser);
-        }
-        if (!typedPass.isEmpty()) {
-            etFbPassword.setText(typedPass);
-        }
-
-        btnCancel.setOnClickListener(v -> dialog.dismiss());
-
-        btnSubmit.setOnClickListener(v -> {
-            String email = etFbEmail.getText() != null ? etFbEmail.getText().toString().trim() : "";
-            String password = etFbPassword.getText() != null ? etFbPassword.getText().toString().trim() : "";
-            String fullName = etFbFullName.getText() != null ? etFbFullName.getText().toString().trim() : "";
-
-            if (email.isEmpty() || !Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-                Toast.makeText(requireContext(), "Vui lòng nhập địa chỉ Email hợp lệ!", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            if (password.length() < 6) {
-                Toast.makeText(requireContext(), "Mật khẩu xác thực Firebase phải từ 6 ký tự trở lên!", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            progressBar.setVisibility(View.VISIBLE);
-            btnSubmit.setEnabled(false);
-
-            FirebaseAuthHelper.authenticateOrRegisterWithFirebase(
-                    requireContext(),
-                    email,
-                    password,
-                    fullName,
-                    new FirebaseAuthHelper.FirebaseAuthCallback() {
-                        @Override
-                        public void onSuccess(String firebaseUid, String resolvedEmail, String resolvedName, String avatarUrl, boolean isRealFirebaseSession) {
-                            btnSubmit.setEnabled(true);
-                            dialog.dismiss();
-                            syncFirebaseUserToBackend(firebaseUid, resolvedEmail, resolvedName, avatarUrl, isRealFirebaseSession);
-                        }
-
-                        @Override
-                        public void onError(String errorMessage) {
-                            progressBar.setVisibility(View.GONE);
-                            btnSubmit.setEnabled(true);
-                            Toast.makeText(requireContext(), errorMessage, Toast.LENGTH_SHORT).show();
-                        }
-                    }
-            );
-        });
-
-        dialog.show();
-    }
-
-    private void syncFirebaseUserToBackend(String firebaseUid, String email, String fullName, String avatarUrl, boolean isRealSession) {
+    private void handleFirebaseLogin() {
+        final int attempt = ++firebaseAttempt;
         progressBar.setVisibility(View.VISIBLE);
-        Map<String, Object> body = new HashMap<>();
-        body.put("email", email);
-        body.put("fullName", fullName);
-        body.put("avatarUrl", avatarUrl != null ? avatarUrl : "");
-        body.put("firebaseUid", firebaseUid);
+        btnFirebaseAuth.setEnabled(false);
+        googleSignInCancellation = new android.os.CancellationSignal();
+        FirebaseAuthHelper.signInWithGoogle(requireActivity(), googleSignInCancellation,
+                new FirebaseAuthHelper.FirebaseAuthCallback() {
+                    @Override
+                    public void onSuccess(String idToken) {
+                        if (!isCurrentFirebaseAttempt(attempt)) return;
+                        syncFirebaseUserToBackend(idToken, attempt);
+                    }
 
-        apiService.firebaseLogin(body).enqueue(new Callback<Map<String, Object>>() {
+                    @Override
+                    public void onError(String message) {
+                        if (!isCurrentFirebaseAttempt(attempt)) return;
+                        finishFirebaseLogin();
+                        Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
+                    }
+                });
+    }
+
+    private boolean isCurrentFirebaseAttempt(int attempt) {
+        return attempt == firebaseAttempt && isAdded() && getView() != null;
+    }
+
+    private void finishFirebaseLogin() {
+        progressBar.setVisibility(View.GONE);
+        btnFirebaseAuth.setEnabled(true);
+    }
+
+    private void syncFirebaseUserToBackend(String idToken, int attempt) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("idToken", idToken);
+        firebaseLoginCall = apiService.firebaseLogin(body);
+        firebaseLoginCall.enqueue(new Callback<Map<String, Object>>() {
             @Override
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
-                progressBar.setVisibility(View.GONE);
-                if (response.isSuccessful() && response.body() != null && response.body().get("user") instanceof Map) {
+                if (!isCurrentFirebaseAttempt(attempt)) return;
+                finishFirebaseLogin();
+                if (response.isSuccessful() && response.body() != null
+                        && "SUCCESS".equals(response.body().get("status"))
+                        && response.body().get("user") instanceof Map) {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> userMap = (Map<String, Object>) response.body().get("user");
+                    if (!(userMap.get("id") instanceof Number)) {
+                        Toast.makeText(requireContext(), "Phản hồi tài khoản không hợp lệ!", Toast.LENGTH_LONG).show();
+                        return;
+                    }
                     saveUserDataToPref(userMap);
                     checkLoginState();
-                    Toast.makeText(requireContext(), "Đăng nhập Google thành công: " + email, Toast.LENGTH_SHORT).show();
+                    Toast.makeText(requireContext(), "Đăng nhập Google thành công!", Toast.LENGTH_SHORT).show();
                 } else {
-                    Toast.makeText(requireContext(), "Không thể đồng bộ tài khoản Google với máy chủ!", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(requireContext(), extractErrorMessage(response,
+                            "Không thể xác thực tài khoản Google với máy chủ!"), Toast.LENGTH_LONG).show();
                 }
             }
 
             @Override
             public void onFailure(Call<Map<String, Object>> call, Throwable t) {
-                progressBar.setVisibility(View.GONE);
-                Toast.makeText(requireContext(), "Lỗi đồng bộ máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                if (!isCurrentFirebaseAttempt(attempt) || call.isCanceled()) return;
+                finishFirebaseLogin();
+                Toast.makeText(requireContext(), "Không thể kết nối máy chủ. Vui lòng thử lại.", Toast.LENGTH_LONG).show();
             }
         });
+    }
+
+    @Override
+    public void onDestroyView() {
+        firebaseAttempt++;
+        if (googleSignInCancellation != null) googleSignInCancellation.cancel();
+        if (firebaseLoginCall != null) firebaseLoginCall.cancel();
+        super.onDestroyView();
     }
 
     // ================= QUÊN MẬT KHẨU TÀI KHOẢN THƯỜNG (GỬI TIN NHẮN SMS OTP 6 SỐ QUA TEXTBEE) =================

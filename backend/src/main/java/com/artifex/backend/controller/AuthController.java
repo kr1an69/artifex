@@ -28,6 +28,7 @@ import java.util.concurrent.ThreadLocalRandom;
 public class AuthController {
 
     private final UserRepository userRepository;
+    private final com.artifex.backend.service.FirebaseLoginService firebaseLoginService;
 
     @Value("${sms.textbee.device-id:}")
     private String textBeeDeviceId;
@@ -239,59 +240,15 @@ public class AuthController {
 
     @PostMapping("/firebase")
     public ResponseEntity<Map<String, Object>> firebaseLogin(@RequestBody FirebaseLoginRequest request) {
-        Map<String, Object> response = new LinkedHashMap<>();
-
-        if (request.getEmail() == null || request.getEmail().trim().isEmpty()) {
-            response.put("status", "ERROR");
-            response.put("message", "Email từ Firebase không hợp lệ!");
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        try {
+            return ResponseEntity.ok(firebaseLoginService.login(request.getIdToken()));
+        } catch (org.springframework.web.server.ResponseStatusException e) {
+            return ResponseEntity.status(e.getStatusCode()).body(Map.of(
+                    "status", "ERROR", "message", e.getReason() != null ? e.getReason() : "Xác thực thất bại!"));
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+                    "status", "ERROR", "message", "Tài khoản vừa thay đổi. Vui lòng đăng nhập lại."));
         }
-
-        String email = request.getEmail().trim().toLowerCase();
-        Optional<User> existingUserOpt = userRepository.findByEmail(email);
-
-        User user;
-        if (existingUserOpt.isPresent()) {
-            user = existingUserOpt.get();
-            boolean updated = false;
-            if (request.getFullName() != null && !request.getFullName().trim().isEmpty()
-                    && (user.getFullName() == null || user.getFullName().trim().isEmpty())) {
-                user.setFullName(request.getFullName().trim());
-                updated = true;
-            }
-            if (request.getAvatarUrl() != null && !request.getAvatarUrl().trim().isEmpty()
-                    && (user.getAvatarUrl() == null || user.getAvatarUrl().trim().isEmpty())) {
-                user.setAvatarUrl(request.getAvatarUrl().trim());
-                updated = true;
-            }
-            if (updated) {
-                user = userRepository.save(user);
-            }
-        } else {
-            String genUsername = email.split("@")[0] + "_" + (System.currentTimeMillis() % 10000);
-            String fullName = (request.getFullName() != null && !request.getFullName().trim().isEmpty())
-                    ? request.getFullName().trim() : email.split("@")[0];
-            String avatar = (request.getAvatarUrl() != null && !request.getAvatarUrl().trim().isEmpty())
-                    ? request.getAvatarUrl().trim() : "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80";
-
-            User newUser = User.builder()
-                    .username(genUsername)
-                    .email(email)
-                    .password("FIREBASE_AUTH")
-                    .fullName(fullName)
-                    .avatarUrl(avatar)
-                    .role("USER")
-                    .build();
-
-            user = userRepository.save(newUser);
-        }
-
-        user.setPassword(null);
-        response.put("status", "SUCCESS");
-        response.put("message", "Đăng nhập Firebase thành công!");
-        response.put("firebaseUid", request.getFirebaseUid());
-        response.put("user", user);
-        return ResponseEntity.ok(response);
     }
 
     // ==================== QUÊN MẬT KHẨU TÀI KHOẢN THƯỜNG (GỬI SMS OTP THẬT TỚI SỐ ĐIỆN THOẠI) ====================

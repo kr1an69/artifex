@@ -23,7 +23,7 @@ class PhoneAuthTest {
     @BeforeEach
     void setup() {
         repository = mock(UserRepository.class);
-        controller = new AuthController(repository);
+        controller = new AuthController(repository, mock(com.artifex.backend.service.FirebaseLoginService.class));
     }
 
     private User existingUser() {

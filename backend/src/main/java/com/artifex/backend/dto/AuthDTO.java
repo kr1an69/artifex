@@ -38,10 +38,7 @@ public class AuthDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class FirebaseLoginRequest {
-        private String email;
-        private String fullName;
-        private String avatarUrl;
-        private String firebaseUid;
+        private String idToken;
     }
 
     @Data

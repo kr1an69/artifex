@@ -2,243 +2,99 @@ package com.artifex.app.ui.auth;
 
 import android.app.Activity;
 import android.content.Context;
-
-import com.google.android.gms.tasks.Task;
+import android.os.CancellationSignal;
+import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
+import androidx.credentials.Credential;
+import androidx.credentials.CredentialManager;
+import androidx.credentials.CredentialManagerCallback;
+import androidx.credentials.CustomCredential;
+import androidx.credentials.GetCredentialRequest;
+import androidx.credentials.GetCredentialResponse;
+import androidx.credentials.exceptions.GetCredentialException;
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption;
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 import com.google.firebase.FirebaseApp;
-import com.google.firebase.FirebaseOptions;
-import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseAuthInvalidUserException;
 import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.auth.OAuthProvider;
-import com.google.firebase.auth.UserProfileChangeRequest;
+import com.google.firebase.auth.GoogleAuthProvider;
 
-import java.util.ArrayList;
-import java.util.List;
-
-/**
- * Helper quản lý khởi tạo và xác thực Firebase Authentication & Google OAuth thật cho Bạn 1 (package ui/auth).
- */
-public class FirebaseAuthHelper {
-
-    // =========================================================================================
-    // ĐIỀN 3 THÔNG SỐ TỪ FIREBASE CONSOLE (Project Settings -> General) ĐỂ MỞ GOOGLE LOGIN THẬT:
-    // (Hoặc copy thông số từ file google-services.json vào 3 dòng dưới đây)
-    // =========================================================================================
-    public static final String FIREBASE_API_KEY = "";      // "current_key" trong google-services.json (bắt đầu bằng "AIzaSy...")
-    public static final String FIREBASE_APP_ID = "";       // "mobilesdk_app_id" (bắt đầu bằng "1:...:android:...")
-    public static final String FIREBASE_PROJECT_ID = "";   // "project_id" (ví dụ: "artifex-pc-store")
+/** Google credential -> Firebase session -> Firebase ID token. No simulated identities. */
+public final class FirebaseAuthHelper {
+    private FirebaseAuthHelper() {}
 
     public interface FirebaseAuthCallback {
-        void onSuccess(String firebaseUid, String email, String fullName, String avatarUrl, boolean isRealFirebaseSession);
-        void onError(String errorMessage);
+        void onSuccess(String idToken);
+        void onError(String message);
     }
 
-    public interface ResetPasswordCallback {
-        void onSuccess(String message);
-        void onError(String errorMessage);
-    }
-
-    /**
-     * Kiểm tra xem dự án đã được cấu hình khóa Firebase thật hay chưa.
-     */
-    public static boolean isFirebaseConfigured(Context context) {
-        return getFirebaseAuth(context) != null;
-    }
-
-    /**
-     * Khởi tạo và lấy đối tượng FirebaseAuth an toàn.
-     */
     public static FirebaseAuth getFirebaseAuth(Context context) {
         if (context == null) return null;
-        Context appContext = context.getApplicationContext();
         try {
-            if (!FirebaseApp.getApps(appContext).isEmpty()) {
-                return FirebaseAuth.getInstance();
-            }
-            // 1. Thử khởi tạo mặc định nếu có google-services resource
-            FirebaseApp defaultApp = FirebaseApp.initializeApp(appContext);
-            if (defaultApp != null) {
-                return FirebaseAuth.getInstance();
-            }
-            // 2. Khởi tạo trực tiếp từ 3 hằng số cấu hình ở trên (không cần sửa build.gradle.kts)
-            if (!FIREBASE_API_KEY.trim().isEmpty()
-                    && !FIREBASE_APP_ID.trim().isEmpty()
-                    && !FIREBASE_PROJECT_ID.trim().isEmpty()) {
-                FirebaseOptions options = new FirebaseOptions.Builder()
-                        .setApiKey(FIREBASE_API_KEY.trim())
-                        .setApplicationId(FIREBASE_APP_ID.trim())
-                        .setProjectId(FIREBASE_PROJECT_ID.trim())
-                        .build();
-                FirebaseApp.initializeApp(appContext, options);
-                return FirebaseAuth.getInstance();
-            }
-        } catch (Exception ignored) {
-        }
-        return null;
-    }
-
-    /**
-     * Mở trực tiếp màn hình Đăng nhập Google thật (accounts.google.com) thông qua Firebase OAuthProvider ("google.com").
-     * Không cần thêm thư viện ngoài vào build.gradle.kts, sử dụng trực tiếp firebase-auth có sẵn.
-     */
-    public static void signInWithRealGooglePopup(Activity activity, FirebaseAuthCallback callback) {
-        FirebaseAuth mAuth = getFirebaseAuth(activity);
-        if (mAuth == null) {
-            callback.onError("NEED_FIREBASE_CONFIG");
-            return;
-        }
-
-        OAuthProvider.Builder provider = OAuthProvider.newBuilder("google.com");
-        // Luôn hiển thị màn hình chọn tài khoản Google thật
-        provider.addCustomParameter("prompt", "select_account");
-        List<String> scopes = new ArrayList<>();
-        scopes.add("email");
-        scopes.add("profile");
-        provider.setScopes(scopes);
-
-        Task<AuthResult> pendingResultTask = mAuth.getPendingAuthResult();
-        if (pendingResultTask != null) {
-            pendingResultTask
-                    .addOnSuccessListener(authResult -> extractAndNotifyGoogleUser(authResult.getUser(), callback))
-                    .addOnFailureListener(e -> callback.onError("Lỗi xác thực Google: " + e.getMessage()));
-        } else {
-            mAuth.startActivityForSignInWithProvider(activity, provider.build())
-                    .addOnSuccessListener(authResult -> extractAndNotifyGoogleUser(authResult.getUser(), callback))
-                    .addOnFailureListener(e -> callback.onError("Đăng nhập Google thất bại hoặc đã hủy: " + e.getMessage()));
+            Context app = context.getApplicationContext();
+            if (FirebaseApp.getApps(app).isEmpty() && FirebaseApp.initializeApp(app) == null) return null;
+            return FirebaseAuth.getInstance();
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            return null;
         }
     }
 
-    private static void extractAndNotifyGoogleUser(FirebaseUser fbUser, FirebaseAuthCallback callback) {
-        if (fbUser == null || fbUser.getEmail() == null) {
-            callback.onError("Không lấy được thông tin Email từ tài khoản Google!");
+    public static void signInWithGoogle(Activity activity, CancellationSignal cancellation,
+                                        FirebaseAuthCallback callback) {
+        FirebaseAuth auth = getFirebaseAuth(activity);
+        int resource = activity.getResources().getIdentifier(
+                "default_web_client_id", "string", activity.getPackageName());
+        if (auth == null || resource == 0 || activity.getString(resource).trim().isEmpty()) {
+            callback.onError("Đăng nhập Google chưa được cấu hình. Vui lòng liên hệ nhóm phát triển.");
             return;
         }
-        String email = fbUser.getEmail();
-        String name = (fbUser.getDisplayName() != null && !fbUser.getDisplayName().isEmpty())
-                ? fbUser.getDisplayName()
-                : email.split("@")[0];
-        String photo = fbUser.getPhotoUrl() != null ? fbUser.getPhotoUrl().toString() : "";
-        callback.onSuccess(fbUser.getUid(), email, name, photo, true);
-    }
-
-    /**
-     * Xác thực trực tiếp với Firebase Authentication bằng Email/Password (Đăng nhập, hoặc tự động Tạo mới trên Firebase).
-     */
-    public static void authenticateOrRegisterWithFirebase(
-            Context context,
-            String email,
-            String password,
-            String fullName,
-            FirebaseAuthCallback callback) {
-
-        String cleanEmail = email != null ? email.trim().toLowerCase() : "";
-        String cleanPass = password != null ? password.trim() : "";
-        String cleanName = (fullName != null && !fullName.trim().isEmpty())
-                ? fullName.trim()
-                : (cleanEmail.contains("@") ? cleanEmail.split("@")[0] : "Khách hàng Artifex");
-
-        FirebaseAuth mAuth = getFirebaseAuth(context);
-
-        if (mAuth == null) {
-            String fallbackUid = "firebase_uid_" + Math.abs(cleanEmail.hashCode());
-            callback.onSuccess(fallbackUid, cleanEmail, cleanName, "", false);
-            return;
-        }
-
-        mAuth.signInWithEmailAndPassword(cleanEmail, cleanPass)
-                .addOnCompleteListener(signInTask -> {
-                    if (signInTask.isSuccessful() && mAuth.getCurrentUser() != null) {
-                        FirebaseUser fbUser = mAuth.getCurrentUser();
-                        String resolvedName = (fbUser.getDisplayName() != null && !fbUser.getDisplayName().isEmpty())
-                                ? fbUser.getDisplayName()
-                                : cleanName;
-                        String resolvedAvatar = fbUser.getPhotoUrl() != null ? fbUser.getPhotoUrl().toString() : "";
-                        callback.onSuccess(fbUser.getUid(), fbUser.getEmail(), resolvedName, resolvedAvatar, true);
-                    } else {
-                        Exception signInEx = signInTask.getException();
-                        if (signInEx instanceof FirebaseAuthInvalidUserException
-                                || (signInEx != null && signInEx.getMessage() != null
-                                && (signInEx.getMessage().contains("no user record")
-                                || signInEx.getMessage().contains("INVALID_LOGIN_CREDENTIALS")))) {
-
-                            mAuth.createUserWithEmailAndPassword(cleanEmail, cleanPass)
-                                    .addOnCompleteListener(createTask -> {
-                                        if (createTask.isSuccessful() && mAuth.getCurrentUser() != null) {
-                                            FirebaseUser newUser = mAuth.getCurrentUser();
-                                            UserProfileChangeRequest profileUpdates = new UserProfileChangeRequest.Builder()
-                                                    .setDisplayName(cleanName)
-                                                    .build();
-                                            newUser.updateProfile(profileUpdates);
-                                            String photo = newUser.getPhotoUrl() != null ? newUser.getPhotoUrl().toString() : "";
-                                            callback.onSuccess(newUser.getUid(), newUser.getEmail(), cleanName, photo, true);
-                                        } else {
-                                            String errMsg = createTask.getException() != null
-                                                    ? createTask.getException().getMessage()
-                                                    : "Xác thực Firebase thất bại!";
-                                            callback.onError("Lỗi Firebase Auth: " + errMsg);
+        GetGoogleIdOption option = new GetGoogleIdOption.Builder()
+                .setServerClientId(activity.getString(resource))
+                .setFilterByAuthorizedAccounts(false).setAutoSelectEnabled(false).build();
+        GetCredentialRequest request = new GetCredentialRequest.Builder().addCredentialOption(option).build();
+        CredentialManager.create(activity).getCredentialAsync(activity, request, cancellation,
+                ContextCompat.getMainExecutor(activity),
+                new CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
+                    @Override
+                    public void onResult(GetCredentialResponse result) {
+                        if (cancellation.isCanceled()) return;
+                        Credential credential = result.getCredential();
+                        if (!(credential instanceof CustomCredential)
+                                || !GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL.equals(credential.getType())) {
+                            callback.onError("Không nhận được thông tin xác thực Google hợp lệ.");
+                            return;
+                        }
+                        try {
+                            GoogleIdTokenCredential google = GoogleIdTokenCredential.createFrom(credential.getData());
+                            auth.signInWithCredential(GoogleAuthProvider.getCredential(google.getIdToken(), null))
+                                    .addOnSuccessListener(resultAuth -> {
+                                        if (cancellation.isCanceled()) return;
+                                        FirebaseUser user = resultAuth.getUser();
+                                        if (user == null) {
+                                            callback.onError("Firebase không trả về tài khoản hợp lệ.");
+                                            return;
                                         }
+                                        user.getIdToken(true).addOnSuccessListener(token -> {
+                                            if (cancellation.isCanceled()) return;
+                                            if (token.getToken() == null || token.getToken().isEmpty()) {
+                                                callback.onError("Không lấy được mã xác thực Firebase.");
+                                            } else {
+                                                callback.onSuccess(token.getToken());
+                                            }
+                                        }).addOnFailureListener(e -> {
+                                            if (!cancellation.isCanceled()) callback.onError("Không lấy được mã xác thực Firebase. Vui lòng thử lại.");
+                                        });
+                                    }).addOnFailureListener(e -> {
+                                        if (!cancellation.isCanceled()) callback.onError("Xác thực Firebase thất bại. Vui lòng thử lại.");
                                     });
-                        } else {
-                            String errMsg = signInEx != null ? signInEx.getMessage() : "Sai thông tin xác thực Firebase!";
-                            callback.onError("Lỗi Firebase Auth: " + errMsg);
+                        } catch (Exception e) {
+                            callback.onError("Thông tin xác thực Google không hợp lệ.");
                         }
                     }
-                });
-    }
 
-    /**
-     * Đồng bộ ngầm tài khoản lên Firebase Authentication khi người dùng Đăng ký hoặc Đăng nhập bằng tài khoản MySQL.
-     */
-    public static void syncUserToFirebaseSilently(Context context, String email, String password, String fullName) {
-        if (email == null || email.trim().isEmpty() || !email.contains("@")) return;
-        if (password == null || password.trim().length() < 6) return;
-
-        FirebaseAuth mAuth = getFirebaseAuth(context);
-        if (mAuth == null) return;
-
-        String cleanEmail = email.trim().toLowerCase();
-        String cleanPass = password.trim();
-        String cleanName = (fullName != null && !fullName.trim().isEmpty()) ? fullName.trim() : cleanEmail.split("@")[0];
-
-        mAuth.signInWithEmailAndPassword(cleanEmail, cleanPass)
-                .addOnFailureListener(e -> {
-                    mAuth.createUserWithEmailAndPassword(cleanEmail, cleanPass)
-                            .addOnSuccessListener(authResult -> {
-                                FirebaseUser user = authResult.getUser();
-                                if (user != null) {
-                                    UserProfileChangeRequest req = new UserProfileChangeRequest.Builder()
-                                            .setDisplayName(cleanName)
-                                            .build();
-                                    user.updateProfile(req);
-                                }
-                            });
-                });
-    }
-
-    /**
-     * Gửi email đặt lại mật khẩu qua Firebase Authentication.
-     */
-    public static void sendPasswordResetEmail(Context context, String email, ResetPasswordCallback callback) {
-        String cleanEmail = email != null ? email.trim().toLowerCase() : "";
-        if (cleanEmail.isEmpty()) {
-            callback.onError("Vui lòng nhập địa chỉ Email!");
-            return;
-        }
-
-        FirebaseAuth mAuth = getFirebaseAuth(context);
-        if (mAuth == null) {
-            callback.onError("Chưa điền khóa FIREBASE_API_KEY trong FirebaseAuthHelper! Bạn có thể dùng chức năng Đặt lại mật khẩu bên dưới.");
-            return;
-        }
-
-        mAuth.sendPasswordResetEmail(cleanEmail)
-                .addOnCompleteListener(task -> {
-                    if (task.isSuccessful()) {
-                        callback.onSuccess("Đã gửi link khôi phục mật khẩu từ Firebase tới email: " + cleanEmail);
-                    } else {
-                        String err = task.getException() != null ? task.getException().getMessage() : "Không thể gửi email!";
-                        callback.onError("Firebase: " + err);
+                    @Override
+                    public void onError(@NonNull GetCredentialException e) {
+                        if (!cancellation.isCanceled()) callback.onError("Đăng nhập Google đã hủy hoặc không khả dụng. Vui lòng thử lại.");
                     }
                 });
     }
