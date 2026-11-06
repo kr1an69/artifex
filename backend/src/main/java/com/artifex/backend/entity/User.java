@@ -15,6 +15,10 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "firebase_uid", unique = true, length = 128,
+            columnDefinition = "varchar(128) collate utf8mb4_bin")
+    private String firebaseUid;
+
     @Column(nullable = false, unique = true, length = 50)
     private String username;
 

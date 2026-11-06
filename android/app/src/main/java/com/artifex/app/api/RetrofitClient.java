@@ -39,7 +39,8 @@ public class RetrofitClient {
     public static Retrofit getClient() {
         if (retrofit == null) {
             HttpLoggingInterceptor logging = new HttpLoggingInterceptor();
-            logging.setLevel(HttpLoggingInterceptor.Level.BODY);
+            // Auth bodies contain passwords and Firebase ID tokens.
+            logging.setLevel(HttpLoggingInterceptor.Level.BASIC);
 
             Interceptor fallbackInterceptor = new Interceptor() {
                 @Override
