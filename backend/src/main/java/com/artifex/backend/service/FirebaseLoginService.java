@@ -18,6 +18,7 @@ import java.util.UUID;
 public class FirebaseLoginService {
     private final UserRepository users;
     private final FirebaseTokenVerifier verifier;
+    private final TokenService tokenService;
 
     @Transactional
     public Map<String, Object> login(String idToken) {
@@ -65,6 +66,7 @@ public class FirebaseLoginService {
         profile.put("gender", user.getGender());
         profile.put("avatarUrl", user.getAvatarUrl());
         profile.put("role", user.getRole());
-        return Map.of("status", "SUCCESS", "message", "Đăng nhập Firebase thành công!", "user", profile);
+        String authToken = tokenService.generateToken(user.getId(), user.getRole());
+        return Map.of("status", "SUCCESS", "message", "Đăng nhập Firebase thành công!", "token", authToken, "user", profile);
     }
 }

@@ -328,6 +328,8 @@ public class AuthFragment extends Fragment {
                 if (!isAdded()) return;
                 if (response.isSuccessful() && response.body() != null && response.body().get("user") instanceof Map) {
                     @SuppressWarnings("unchecked")
+                    String token = (String) response.body().get("token");
+                    if (token != null) prefManager.saveAuthToken(token);
                     Map<String, Object> userMap = (Map<String, Object>) response.body().get("user");
                     saveUserDataToPref(userMap);
                     bindProfileData();
@@ -476,8 +478,14 @@ public class AuthFragment extends Fragment {
                 return;
             }
 
-            if (newEmail.isEmpty() || !Patterns.EMAIL_ADDRESS.matcher(newEmail).matches()) {
-                Toast.makeText(requireContext(), "Địa chỉ email không hợp lệ!", Toast.LENGTH_SHORT).show();
+            if (newEmail.isEmpty() || !isValidGmail(newEmail)) {
+                Toast.makeText(requireContext(), "Email phải có định dạng @gmail.com!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            String cleanPhone = normalizeLoginPhone(newPhone);
+            if (cleanPhone.isEmpty()) {
+                Toast.makeText(requireContext(), "Số điện thoại không hợp lệ! Vui lòng nhập đúng 10 số (ví dụ: 09xxxxxxxx).", Toast.LENGTH_SHORT).show();
                 return;
             }
 
@@ -488,7 +496,7 @@ public class AuthFragment extends Fragment {
             Map<String, Object> body = new HashMap<>();
             body.put("fullName", newFullName);
             body.put("email", newEmail);
-            body.put("phone", newPhone);
+            body.put("phone", cleanPhone);
             body.put("dateOfBirth", newDob);
             body.put("gender", selectedGender);
 
@@ -496,25 +504,24 @@ public class AuthFragment extends Fragment {
             apiService.updateProfile(prefManager.getUserId(), body).enqueue(new Callback<Map<String, Object>>() {
                 @Override
                 public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                    if (!isAdded()) return;
                     progressBar.setVisibility(View.GONE);
                     btnSave.setEnabled(true);
 
                     if (response.isSuccessful()) {
-                        prefManager.updatePersonalInfo(newFullName, newEmail, newPhone, newDob, finalGender);
+                        prefManager.updatePersonalInfo(newFullName, newEmail, cleanPhone, newDob, finalGender);
                         bindProfileData();
                         dialog.dismiss();
                         Toast.makeText(requireContext(), "Cập nhật thông tin cá nhân thành công!", Toast.LENGTH_SHORT).show();
                     } else {
-                        String errorMsg = "Cập nhật thất bại!";
-                        if (response.code() == 400) {
-                            errorMsg = "Email đã được sử dụng bởi tài khoản khác!";
-                        }
+                        String errorMsg = extractErrorMessage(response, "Cập nhật thất bại!");
                         Toast.makeText(requireContext(), errorMsg, Toast.LENGTH_SHORT).show();
                     }
                 }
 
                 @Override
                 public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                    if (!isAdded()) return;
                     progressBar.setVisibility(View.GONE);
                     btnSave.setEnabled(true);
                     Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
@@ -545,6 +552,8 @@ public class AuthFragment extends Fragment {
                 progressBar.setVisibility(View.GONE);
                 if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
                     @SuppressWarnings("unchecked")
+                    String token = (String) response.body().get("token");
+                    if (token != null) prefManager.saveAuthToken(token);
                     Map<String, Object> userMap = (Map<String, Object>) response.body().get("user");
                     saveUserDataToPref(userMap);
 
@@ -771,6 +780,8 @@ public class AuthFragment extends Fragment {
                         dialog.dismiss();
 
                         @SuppressWarnings("unchecked")
+                        String token = (String) response.body().get("token");
+                        if (token != null) prefManager.saveAuthToken(token);
                         Map<String, Object> userMap = (Map<String, Object>) response.body().get("user");
                         saveUserDataToPref(userMap);
 
@@ -878,6 +889,8 @@ public class AuthFragment extends Fragment {
                         Toast.makeText(requireContext(), "Phản hồi tài khoản không hợp lệ!", Toast.LENGTH_LONG).show();
                         return;
                     }
+                    String token = (String) response.body().get("token");
+                    if (token != null) prefManager.saveAuthToken(token);
                     saveUserDataToPref(userMap);
                     checkLoginState();
                     Toast.makeText(requireContext(), "Đăng nhập Google thành công!", Toast.LENGTH_SHORT).show();
@@ -1051,6 +1064,8 @@ public class AuthFragment extends Fragment {
 
                         if (response.body().get("user") instanceof Map) {
                             @SuppressWarnings("unchecked")
+                            String token = (String) response.body().get("token");
+                            if (token != null) prefManager.saveAuthToken(token);
                             Map<String, Object> userMap = (Map<String, Object>) response.body().get("user");
                             saveUserDataToPref(userMap);
                             checkLoginState();

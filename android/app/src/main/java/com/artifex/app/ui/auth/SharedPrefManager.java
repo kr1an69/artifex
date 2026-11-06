@@ -23,6 +23,7 @@ public class SharedPrefManager {
     private static final String KEY_ADDRESS = "key_address";
     private static final String KEY_AVATAR_URL = "key_avatar_url";
     private static final String KEY_IS_LOGGED_IN = "key_is_logged_in";
+    private static final String KEY_AUTH_TOKEN = "key_auth_token";
     private static final String KEY_ADDRESS_LIST_PREFIX = "key_address_list_";
 
     private static SharedPrefManager instance;
@@ -249,9 +250,29 @@ public class SharedPrefManager {
     /**
      * Đăng xuất: Chỉ xóa phiên đăng nhập hiện tại, GIỮ NGUYÊN sổ địa chỉ (key_address_list_<userId>) của từng user.
      */
+    public void saveAuthToken(String token) {
+        if (token != null) {
+            ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).edit()
+                    .putString(KEY_AUTH_TOKEN, token.trim()).apply();
+        }
+    }
+
+    public String getAuthToken() {
+        return ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_AUTH_TOKEN, "");
+    }
+
+    public static String getAuthTokenStatic() {
+        if (instance != null) {
+            return instance.getAuthToken();
+        }
+        return "";
+    }
+
     public void clear() {
         SharedPreferences.Editor editor = ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).edit();
         editor.remove(KEY_USER_ID);
+        editor.remove(KEY_AUTH_TOKEN);
         editor.remove(KEY_USERNAME);
         editor.remove(KEY_EMAIL);
         editor.remove(KEY_FULL_NAME);
