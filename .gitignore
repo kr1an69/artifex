@@ -31,6 +31,9 @@ out/
 
 # Android specific secrets & local configs
 local.properties
+google-services.json
+*firebase-adminsdk*.json
+service-account*.json
 .navigation/
 captures/
 output.json
