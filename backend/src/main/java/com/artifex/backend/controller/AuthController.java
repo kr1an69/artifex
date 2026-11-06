@@ -29,6 +29,7 @@ public class AuthController {
 
     private final UserRepository userRepository;
     private final com.artifex.backend.service.FirebaseLoginService firebaseLoginService;
+    private final com.artifex.backend.service.TokenService tokenService;
 
     @Value("${sms.textbee.device-id:}")
     private String textBeeDeviceId;
@@ -201,8 +202,11 @@ public class AuthController {
         User savedUser = userRepository.save(newUser);
         savedUser.setPassword(null);
 
+        String token = tokenService.generateToken(savedUser.getId(), savedUser.getRole());
+
         response.put("status", "SUCCESS");
         response.put("message", "Đăng ký tài khoản thành công!");
+        response.put("token", token);
         response.put("user", savedUser);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -232,8 +236,11 @@ public class AuthController {
         User user = userOpt.get();
         user.setPassword(null);
 
+        String token = tokenService.generateToken(user.getId(), user.getRole());
+
         response.put("status", "SUCCESS");
         response.put("message", "Đăng nhập thành công!");
+        response.put("token", token);
         response.put("user", user);
         return ResponseEntity.ok(response);
     }
@@ -362,9 +369,21 @@ public class AuthController {
         otpStorage.remove(key);
         savedUser.setPassword(null);
 
+        String token = tokenService.generateToken(savedUser.getId(), savedUser.getRole());
+
         response.put("status", "SUCCESS");
         response.put("message", "Đặt lại mật khẩu và đăng nhập thành công!");
+        response.put("token", token);
         response.put("user", savedUser);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Map<String, Object>> logout(@RequestHeader(value = "Authorization", required = false) String authHeader) {
+        tokenService.revokeHeader(authHeader);
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("status", "SUCCESS");
+        response.put("message", "Đăng xuất thành công!");
         return ResponseEntity.ok(response);
     }
 

@@ -19,9 +19,14 @@ import java.util.Optional;
 public class UserController {
 
     private final UserRepository userRepository;
+    private final com.artifex.backend.service.TokenService tokenService;
 
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> getUserById(@PathVariable Long id) {
+    public ResponseEntity<Map<String, Object>> getUserById(@PathVariable Long id,
+                                                            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        ResponseEntity<Map<String, Object>> authError = verifyUserAuthorization(id, authHeader);
+        if (authError != null) return authError;
+
         Map<String, Object> response = new LinkedHashMap<>();
         Optional<User> userOpt = userRepository.findById(id);
 
@@ -41,7 +46,11 @@ public class UserController {
 
     @PutMapping("/{id}")
     public ResponseEntity<Map<String, Object>> updateProfile(@PathVariable Long id,
+                                                            @RequestHeader(value = "Authorization", required = false) String authHeader,
                                                             @RequestBody UpdateProfileRequest request) {
+        ResponseEntity<Map<String, Object>> authError = verifyUserAuthorization(id, authHeader);
+        if (authError != null) return authError;
+
         Map<String, Object> response = new LinkedHashMap<>();
         Optional<User> userOpt = userRepository.findById(id);
 
@@ -108,7 +117,11 @@ public class UserController {
 
     @PutMapping("/{id}/avatar")
     public ResponseEntity<Map<String, Object>> updateAvatar(@PathVariable Long id,
+                                                           @RequestHeader(value = "Authorization", required = false) String authHeader,
                                                            @RequestBody UpdateAvatarRequest request) {
+        ResponseEntity<Map<String, Object>> authError = verifyUserAuthorization(id, authHeader);
+        if (authError != null) return authError;
+
         Map<String, Object> response = new LinkedHashMap<>();
         Optional<User> userOpt = userRepository.findById(id);
 
@@ -138,7 +151,11 @@ public class UserController {
 
     @PutMapping("/{id}/password")
     public ResponseEntity<Map<String, Object>> changePassword(@PathVariable Long id,
+                                                              @RequestHeader(value = "Authorization", required = false) String authHeader,
                                                               @RequestBody ChangePasswordRequest request) {
+        ResponseEntity<Map<String, Object>> authError = verifyUserAuthorization(id, authHeader);
+        if (authError != null) return authError;
+
         Map<String, Object> response = new LinkedHashMap<>();
         Optional<User> userOpt = userRepository.findById(id);
 
@@ -216,5 +233,26 @@ public class UserController {
             return "0" + e164.substring(3);
         }
         return rawPhone.replaceAll("[^0-9]", "");
+    }
+
+    /**
+     * Xác thực quyền sở hữu tài nguyên để chống lỗ hổng IDOR.
+     * Chỉ cho phép chính chủ nhân của tài khoản hoặc tài khoản có role ADMIN thao tác.
+     */
+    private ResponseEntity<Map<String, Object>> verifyUserAuthorization(Long targetUserId, String authHeader) {
+        com.artifex.backend.service.TokenService.TokenSession session = tokenService.validateHeader(authHeader);
+        if (session == null) {
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("status", "ERROR");
+            response.put("message", "Vui lòng đăng nhập để thực hiện thao tác này!");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+        }
+        if (!session.getUserId().equals(targetUserId) && !"ADMIN".equalsIgnoreCase(session.getRole())) {
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("status", "ERROR");
+            response.put("message", "Bạn không có quyền thao tác trên tài khoản khác!");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+        }
+        return null;
     }
 }

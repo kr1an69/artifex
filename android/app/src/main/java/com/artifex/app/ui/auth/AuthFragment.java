@@ -316,6 +316,8 @@ public class AuthFragment extends Fragment {
                 if (!isAdded()) return;
                 if (response.isSuccessful() && response.body() != null && response.body().get("user") instanceof Map) {
                     @SuppressWarnings("unchecked")
+                    String token = (String) response.body().get("token");
+                    if (token != null) prefManager.saveAuthToken(token);
                     Map<String, Object> userMap = (Map<String, Object>) response.body().get("user");
                     saveUserDataToPref(userMap);
                     bindProfileData();
@@ -538,6 +540,8 @@ public class AuthFragment extends Fragment {
                 progressBar.setVisibility(View.GONE);
                 if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
                     @SuppressWarnings("unchecked")
+                    String token = (String) response.body().get("token");
+                    if (token != null) prefManager.saveAuthToken(token);
                     Map<String, Object> userMap = (Map<String, Object>) response.body().get("user");
                     saveUserDataToPref(userMap);
 
@@ -764,6 +768,8 @@ public class AuthFragment extends Fragment {
                         dialog.dismiss();
 
                         @SuppressWarnings("unchecked")
+                        String token = (String) response.body().get("token");
+                        if (token != null) prefManager.saveAuthToken(token);
                         Map<String, Object> userMap = (Map<String, Object>) response.body().get("user");
                         saveUserDataToPref(userMap);
 
@@ -871,6 +877,8 @@ public class AuthFragment extends Fragment {
                         Toast.makeText(requireContext(), "Phản hồi tài khoản không hợp lệ!", Toast.LENGTH_LONG).show();
                         return;
                     }
+                    String token = (String) response.body().get("token");
+                    if (token != null) prefManager.saveAuthToken(token);
                     saveUserDataToPref(userMap);
                     checkLoginState();
                     Toast.makeText(requireContext(), "Đăng nhập Google thành công!", Toast.LENGTH_SHORT).show();
@@ -1044,6 +1052,8 @@ public class AuthFragment extends Fragment {
 
                         if (response.body().get("user") instanceof Map) {
                             @SuppressWarnings("unchecked")
+                            String token = (String) response.body().get("token");
+                            if (token != null) prefManager.saveAuthToken(token);
                             Map<String, Object> userMap = (Map<String, Object>) response.body().get("user");
                             saveUserDataToPref(userMap);
                             checkLoginState();

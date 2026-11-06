@@ -25,7 +25,7 @@ class FirebaseLoginTest {
     void setup() {
         users = mock(UserRepository.class);
         verifier = mock(FirebaseTokenVerifier.class);
-        service = new FirebaseLoginService(users, verifier);
+        service = new FirebaseLoginService(users, verifier, new com.artifex.backend.service.TokenService());
     }
 
     private FirebaseToken verifiedToken(String uid, String email) {
@@ -40,7 +40,8 @@ class FirebaseLoginTest {
     @Test
     void missingTokenCannotUseLegacyEmailLogin() {
         var realVerifier = new FirebaseTokenVerifier("");
-        var controller = new AuthController(users, new FirebaseLoginService(users, realVerifier));
+        var tokenService = new com.artifex.backend.service.TokenService();
+        var controller = new AuthController(users, new FirebaseLoginService(users, realVerifier, tokenService), tokenService);
         var response = controller.firebaseLogin(new FirebaseLoginRequest(null));
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
         verifyNoInteractions(users);
@@ -49,7 +50,7 @@ class FirebaseLoginTest {
     @Test
     void invalidExpiredOrRevokedTokenCannotReadUsers() {
         when(verifier.verify("bad-token")).thenThrow(new ResponseStatusException(HttpStatus.UNAUTHORIZED));
-        var controller = new AuthController(users, service);
+        var controller = new AuthController(users, service, new com.artifex.backend.service.TokenService());
         assertEquals(HttpStatus.UNAUTHORIZED,
                 controller.firebaseLogin(new FirebaseLoginRequest("bad-token")).getStatusCode());
         verifyNoInteractions(users);
@@ -57,7 +58,8 @@ class FirebaseLoginTest {
 
     @Test
     void missingServerConfigurationFailsClosed() {
-        var controller = new AuthController(users, new FirebaseLoginService(users, new FirebaseTokenVerifier("")));
+        var tokenService = new com.artifex.backend.service.TokenService();
+        var controller = new AuthController(users, new FirebaseLoginService(users, new FirebaseTokenVerifier(""), tokenService), tokenService);
         assertEquals(HttpStatus.SERVICE_UNAVAILABLE,
                 controller.firebaseLogin(new FirebaseLoginRequest("some-token")).getStatusCode());
         verifyNoInteractions(users);
