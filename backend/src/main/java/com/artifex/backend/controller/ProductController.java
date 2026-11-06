@@ -65,21 +65,30 @@ public class ProductController {
     }
 
     @PostMapping("/{id}/image")
-    public ResponseEntity<ApiResponse<Map<String, String>>> uploadProductImage(
+    public ResponseEntity<ApiResponse<String>> uploadProductImage(
             @PathVariable Long id,
-            @RequestParam("file") MultipartFile file
-    ) {
+            @RequestParam("file") MultipartFile file) {
         try {
-            String imageUrl = productService.uploadProductImage(id, file);
-            Map<String, String> responseData = new HashMap<>();
-            responseData.put("imageUrl", imageUrl);
-            return ResponseEntity.ok(ApiResponse.success(responseData, "Image uploaded successfully"));
-        } catch (IOException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error(500, "Failed to upload image to Cloudinary"));
+            String imageUrl = productService.uploadImage(id, file);
+            return ResponseEntity.ok(ApiResponse.<String>builder()
+                    .statusCode(200)
+                    .message("Tải ảnh lên thành công")
+                    .data(imageUrl)
+                    .build());
+        } catch (IllegalArgumentException e) {
+            // Trả về 400 Bad Request nếu file rỗng / không hợp lệ
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.<String>builder()
+                            .statusCode(400)
+                            .message(e.getMessage())
+                            .build());
         } catch (RuntimeException e) {
+            // Trả về 404 Not Found nếu không tìm thấy Product ID
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponse.error(404, e.getMessage()));
+                    .body(ApiResponse.<String>builder()
+                            .statusCode(404)
+                            .message(e.getMessage())
+                            .build());
         }
     }
 }
