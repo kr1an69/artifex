@@ -65,21 +65,37 @@ public class ProductController {
     }
 
     @PostMapping("/{id}/image")
-    public ResponseEntity<ApiResponse<Map<String, String>>> uploadProductImage(
+    public ResponseEntity<ApiResponse<String>> uploadProductImage(
             @PathVariable Long id,
-            @RequestParam("file") MultipartFile file
-    ) {
+            @RequestParam("file") MultipartFile file) {
         try {
             String imageUrl = productService.uploadProductImage(id, file);
-            Map<String, String> responseData = new HashMap<>();
-            responseData.put("imageUrl", imageUrl);
-            return ResponseEntity.ok(ApiResponse.success(responseData, "Image uploaded successfully"));
+            return ResponseEntity.ok(ApiResponse.<String>builder()
+                    .statusCode(200)
+                    .message("Tải ảnh lên thành công")
+                    .data(imageUrl)
+                    .build());
+        } catch (IllegalArgumentException e) {
+            // File rỗng / không hợp lệ -> 400 Bad Request
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.<String>builder()
+                            .statusCode(400)
+                            .message(e.getMessage())
+                            .build());
         } catch (IOException e) {
+            // Lỗi đọc file / mạng Cloudinary -> 500 Internal Server Error
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error(500, "Failed to upload image to Cloudinary"));
+                    .body(ApiResponse.<String>builder()
+                            .statusCode(500)
+                            .message("Lỗi khi tải ảnh lên Cloudinary: " + e.getMessage())
+                            .build());
         } catch (RuntimeException e) {
+            // Không tìm thấy sản phẩm -> 404 Not Found
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponse.error(404, e.getMessage()));
+                    .body(ApiResponse.<String>builder()
+                            .statusCode(404)
+                            .message(e.getMessage())
+                            .build());
         }
     }
 }
