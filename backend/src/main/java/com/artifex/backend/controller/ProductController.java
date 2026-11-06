@@ -76,14 +76,21 @@ public class ProductController {
                     .data(imageUrl)
                     .build());
         } catch (IllegalArgumentException e) {
-            // Trả về 400 Bad Request nếu file rỗng / không hợp lệ
+            // File rỗng / không hợp lệ -> 400 Bad Request
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(ApiResponse.<String>builder()
                             .statusCode(400)
                             .message(e.getMessage())
                             .build());
+        } catch (IOException e) {
+            // Lỗi đọc file / mạng Cloudinary -> 500 Internal Server Error
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.<String>builder()
+                            .statusCode(500)
+                            .message("Lỗi khi tải ảnh lên Cloudinary: " + e.getMessage())
+                            .build());
         } catch (RuntimeException e) {
-            // Trả về 404 Not Found nếu không tìm thấy Product ID
+            // Không tìm thấy sản phẩm -> 404 Not Found
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(ApiResponse.<String>builder()
                             .statusCode(404)
