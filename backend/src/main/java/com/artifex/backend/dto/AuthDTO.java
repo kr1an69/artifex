@@ -10,7 +10,7 @@ public class AuthDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class LoginRequest {
-        private String usernameOrEmail;
+        private String phone;
         private String password;
     }
 
@@ -18,7 +18,6 @@ public class AuthDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class RegisterRequest {
-        private String username;
         private String email;
         private String password;
         private String fullName;
@@ -31,7 +30,6 @@ public class AuthDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class RegisterOtpRequest {
-        private String username;
         private String phone;
         private String email;
     }
@@ -40,10 +38,7 @@ public class AuthDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class FirebaseLoginRequest {
-        private String email;
-        private String fullName;
-        private String avatarUrl;
-        private String firebaseUid;
+        private String idToken;
     }
 
     @Data
@@ -77,15 +72,14 @@ public class AuthDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class ForgotPasswordOtpRequest {
-        private String username;
-        private String emailOrPhone;
+        private String phone;
     }
 
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
     public static class ForgotPasswordRequest {
-        private String username;
+        private String phone;
         private String otp;
         private String newPassword;
     }
