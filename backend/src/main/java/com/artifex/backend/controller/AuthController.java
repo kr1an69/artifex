@@ -37,17 +37,20 @@ public class AuthController {
     @Value("${sms.textbee.api-key:}")
     private String textBeeApiKey;
 
-    // Lưu mã OTP tạm thời trong bộ nhớ với thời hạn 5 phút (300.000 ms)
-    private static final long OTP_EXPIRATION_MS = 5 * 60 * 1000L;
+    // Lưu mã OTP tạm thời trong bộ nhớ với thời hạn 1 phút (60.000 ms), giới hạn tối đa 5 lần nhập sai
+    private static final long OTP_EXPIRATION_MS = 60 * 1000L;
+    private static final int MAX_OTP_ATTEMPTS = 5;
     private final Map<String, OtpRecord> otpStorage = new ConcurrentHashMap<>();
 
     private static class OtpRecord {
         final String otpCode;
         final long expiresAt;
+        int failedAttempts;
 
         OtpRecord(String otpCode, long expiresAt) {
             this.otpCode = otpCode;
             this.expiresAt = expiresAt;
+            this.failedAttempts = 0;
         }
     }
 
@@ -93,25 +96,33 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
+        String storageKey = "reg:" + domesticPhone;
+        OtpRecord existingRecord = otpStorage.get(storageKey);
+        if (existingRecord != null && System.currentTimeMillis() < existingRecord.expiresAt) {
+            long remainingSeconds = Math.max(1, (existingRecord.expiresAt - System.currentTimeMillis()) / 1000L);
+            response.put("status", "ERROR");
+            response.put("message", "Mã OTP đã được gửi. Vui lòng đợi " + remainingSeconds + " giây trước khi yêu cầu lại!");
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(response);
+        }
+
         // Sinh mã OTP 6 chữ số ngẫu nhiên
         String otpCode = String.format("%06d", ThreadLocalRandom.current().nextInt(100000, 1000000));
-        String storageKey = "reg:" + domesticPhone;
         otpStorage.put(storageKey, new OtpRecord(otpCode, System.currentTimeMillis() + OTP_EXPIRATION_MS));
 
         // Gửi tin nhắn SMS thật qua gateway TextBee
-        String smsMessage = "[ARTIFEX PC] Ma xac thuc OTP tao tai khoan Artifex cua ban la: " + otpCode + " (Hieu luc 5 phut). Tuyet doi khong chia se ma nay!";
+        String smsMessage = "[ARTIFEX PC] Ma xac thuc OTP tao tai khoan Artifex cua ban la: " + otpCode + " (Hieu luc 1 phut). Tuyet doi khong chia se ma nay!";
         boolean gatewaySent = sendRealSmsViaGateway(domesticPhone, otpCode, smsMessage);
 
         System.out.println("==================================================================");
         System.out.println("[ARTIFEX SMS OTP] YEU CAU MA OTP DANG KY TAI KHOAN MOI");
         System.out.println("[ARTIFEX SMS OTP] Số điện thoại nhận SMS: " + domesticPhone);
-        System.out.println("[ARTIFEX SMS OTP] MA XAC THUC OTP (5 phut): " + otpCode);
+        System.out.println("[ARTIFEX SMS OTP] MA XAC THUC OTP (1 phut): " + otpCode);
         System.out.println("[ARTIFEX SMS OTP] Trang thai Gateway (TextBee): " + (gatewaySent ? "DA GUI SMS THAT VE SIM DIEN THOAI" : "LUU TAM VA IN CONSOLE"));
         System.out.println("==================================================================");
 
         String masked = maskContactInfo(domesticPhone);
         response.put("status", "SUCCESS");
-        response.put("message", "Đã gửi mã xác thực OTP tới số " + masked + ". Vui lòng kiểm tra tin nhắn SMS!");
+        response.put("message", "Đã gửi mã xác thực OTP tới số " + masked + ". Mã có hiệu lực trong 1 phút.");
         return ResponseEntity.ok(response);
     }
 
@@ -157,18 +168,23 @@ public class AuthController {
         if (System.currentTimeMillis() > record.expiresAt) {
             otpStorage.remove(storageKey);
             response.put("status", "ERROR");
-            response.put("message", "Mã OTP đã hết hạn (quá 5 phút), vui lòng gửi lại mã mới!");
+            response.put("message", "Mã OTP đã hết hạn (quá 1 phút), vui lòng gửi lại mã mới!");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
         if (!record.otpCode.equals(otpInput)) {
+            record.failedAttempts++;
+            if (record.failedAttempts >= MAX_OTP_ATTEMPTS) {
+                otpStorage.remove(storageKey);
+                response.put("status", "ERROR");
+                response.put("message", "Bạn đã nhập sai mã OTP quá 5 lần. Mã đã bị hủy vì lý do bảo mật, vui lòng gửi lại mã mới!");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
+            int remaining = MAX_OTP_ATTEMPTS - record.failedAttempts;
             response.put("status", "ERROR");
-            response.put("message", "Mã xác thực OTP không chính xác!");
+            response.put("message", "Mã xác thực OTP không chính xác! Bạn còn " + remaining + " lần thử.");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
-
-        // Mã OTP hợp lệ -> Xóa khỏi kho lưu
-        otpStorage.remove(storageKey);
 
         // Kiểm tra và bắt buộc Email phải có định dạng @gmail.com
         String email = request.getEmail() != null ? request.getEmail().trim().toLowerCase() : "";
@@ -187,6 +203,9 @@ public class AuthController {
             response.put("message", "Email này đã được sử dụng cho một tài khoản khác!");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
+
+        // Mọi thông tin hợp lệ -> Xóa mã OTP và lưu tài khoản
+        otpStorage.remove(storageKey);
 
         User newUser = User.builder()
                 .username("phone_" + java.util.UUID.randomUUID())
@@ -281,8 +300,17 @@ public class AuthController {
         }
         User user = userOpt.get();
 
+        String resetKey = "reset:" + normalizeVietnamPhone(user.getPhone());
+        OtpRecord existingRecord = otpStorage.get(resetKey);
+        if (existingRecord != null && System.currentTimeMillis() < existingRecord.expiresAt) {
+            long remainingSeconds = Math.max(1, (existingRecord.expiresAt - System.currentTimeMillis()) / 1000L);
+            response.put("status", "ERROR");
+            response.put("message", "Mã OTP đã được gửi. Vui lòng đợi " + remainingSeconds + " giây trước khi yêu cầu lại!");
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(response);
+        }
+
         String otpCode = String.format("%06d", ThreadLocalRandom.current().nextInt(100000, 1000000));
-        otpStorage.put("reset:" + normalizeVietnamPhone(user.getPhone()), new OtpRecord(otpCode, System.currentTimeMillis() + OTP_EXPIRATION_MS));
+        otpStorage.put(resetKey, new OtpRecord(otpCode, System.currentTimeMillis() + OTP_EXPIRATION_MS));
 
         String targetPhone = toDomesticVietnamPhone(user.getPhone());
         boolean gatewaySent = false;
@@ -296,12 +324,12 @@ public class AuthController {
         System.out.println("[ARTIFEX SMS OTP] KHOI PHUC MAT KHAU");
         System.out.println("[ARTIFEX SMS OTP] Tai khoan: " + user.getUsername());
         System.out.println("[ARTIFEX SMS OTP] So dien thoai nhan SMS that: " + (!targetPhone.isEmpty() ? targetPhone : contactInput));
-        System.out.println("[ARTIFEX SMS OTP] Ma xac thuc OTP (hieu luc 5 phut): " + otpCode);
+        System.out.println("[ARTIFEX SMS OTP] Ma xac thuc OTP (hieu luc 1 phut): " + otpCode);
         System.out.println("[ARTIFEX SMS OTP] Trang thai SMS Gateway (TextBee): " + (gatewaySent ? "DA GUI SMS THAT VE DIEN THOAI" : "LOI KET NOI GATEWAY"));
         System.out.println("==================================================================");
 
         response.put("status", "SUCCESS");
-        response.put("message", "Đã gửi mã OTP (6 chữ số) tới " + maskedContact + ". Mã có hiệu lực trong 5 phút.");
+        response.put("message", "Đã gửi mã OTP (6 chữ số) tới " + maskedContact + ". Mã có hiệu lực trong 1 phút.");
         response.put("phone", targetPhone);
         response.put("maskedContact", maskedContact);
         response.put("targetPhone", targetPhone);
@@ -354,13 +382,21 @@ public class AuthController {
         if (System.currentTimeMillis() > record.expiresAt) {
             otpStorage.remove(key);
             response.put("status", "ERROR");
-            response.put("message", "Mã OTP đã hết hạn (quá 5 phút), vui lòng lấy lại mã mới!");
+            response.put("message", "Mã OTP đã hết hạn (quá 1 phút), vui lòng lấy lại mã mới!");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
         if (!record.otpCode.equals(otpInput)) {
+            record.failedAttempts++;
+            if (record.failedAttempts >= MAX_OTP_ATTEMPTS) {
+                otpStorage.remove(key);
+                response.put("status", "ERROR");
+                response.put("message", "Bạn đã nhập sai mã OTP quá 5 lần. Mã đã bị hủy vì lý do bảo mật, vui lòng lấy lại mã mới!");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
+            int remaining = MAX_OTP_ATTEMPTS - record.failedAttempts;
             response.put("status", "ERROR");
-            response.put("message", "Mã xác thực OTP không chính xác!");
+            response.put("message", "Mã xác thực OTP không chính xác! Bạn còn " + remaining + " lần thử.");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
@@ -454,7 +490,7 @@ public class AuthController {
         String domesticPhone = toDomesticVietnamPhone(rawPhone);
         String smsContent = (customMessage != null && !customMessage.isBlank())
                 ? customMessage
-                : "[ARTIFEX PC] Ma xac thuc OTP cua ban la: " + otpCode + " (Hieu luc 5 phut). Tuyet doi khong chia se ma nay!";
+                : "[ARTIFEX PC] Ma xac thuc OTP cua ban la: " + otpCode + " (Hieu luc 1 phut). Tuyet doi khong chia se ma nay!";
 
         HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))

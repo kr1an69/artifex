@@ -107,6 +107,45 @@ class PhoneAuthTest {
         verify(repository, times(1)).save(user);
     }
 
+    @Test
+    void otpIsInvalidatedAfter5FailedAttempts() throws Exception {
+        User user = existingUser();
+        when(repository.findAll()).thenReturn(List.of(user));
+        seedOtp("reset:+84912345678", "123456");
+
+        // Nhập sai 4 lần -> Vẫn còn mã, báo số lần còn lại
+        for (int i = 1; i <= 4; i++) {
+            var resp = controller.resetPasswordWithOtp(new ForgotPasswordRequest("0912345678", "000000", "newpass123"));
+            assertEquals(HttpStatus.BAD_REQUEST, resp.getStatusCode());
+            assertTrue(resp.getBody().get("message").toString().contains("còn " + (5 - i) + " lần"));
+        }
+
+        // Nhập sai lần thứ 5 -> Mã bị hủy hoàn toàn
+        var resp5 = controller.resetPasswordWithOtp(new ForgotPasswordRequest("0912345678", "000000", "newpass123"));
+        assertEquals(HttpStatus.BAD_REQUEST, resp5.getStatusCode());
+        assertTrue(resp5.getBody().get("message").toString().contains("quá 5 lần"));
+
+        // Lần thứ 6 nhập ĐÚNG mã cũ cũng không còn hiệu lực
+        var resp6 = controller.resetPasswordWithOtp(new ForgotPasswordRequest("0912345678", "123456", "newpass123"));
+        assertEquals(HttpStatus.BAD_REQUEST, resp6.getStatusCode());
+        assertTrue(resp6.getBody().get("message").toString().contains("Chưa có yêu cầu mã OTP"));
+    }
+
+    @Test
+    void resendOtpWithinCooldownReturnsTooManyRequests() throws Exception {
+        User user = existingUser();
+        when(repository.findAll()).thenReturn(List.of(user));
+
+        // Yêu cầu lần 1 -> Thành công (200 OK)
+        var resp1 = controller.requestForgotPasswordOtp(new ForgotPasswordOtpRequest("0912345678"));
+        assertEquals(HttpStatus.OK, resp1.getStatusCode());
+
+        // Yêu cầu lần 2 ngay lập tức khi chưa hết 1 phút -> Bị chặn 429 TOO_MANY_REQUESTS
+        var resp2 = controller.requestForgotPasswordOtp(new ForgotPasswordOtpRequest("0912345678"));
+        assertEquals(HttpStatus.TOO_MANY_REQUESTS, resp2.getStatusCode());
+        assertTrue(resp2.getBody().get("message").toString().contains("Vui lòng đợi"));
+    }
+
     @SuppressWarnings("unchecked")
     private void seedOtp(String key, String code) throws Exception {
         Field field = AuthController.class.getDeclaredField("otpStorage");
