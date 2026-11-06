@@ -157,12 +157,17 @@ INSERT INTO stores (id, name, address, latitude, longitude, phone, opening_hours
 -- SEED ORDERS & ORDER_DETAILS
 INSERT INTO orders (id, user_id, total_price, status, receiver_name, receiver_phone, shipping_address) VALUES
 (1, 1, 24880000.00, 'COMPLETED', 'Nguyễn Văn A', '0901234567', 'Khu phố 6, P. Linh Trung, TP. Thủ Đức, TP.HCM'),
-(2, 1, 3190000.00, 'SHIPPING', 'Nguyễn Văn A', '0901234567', 'Khu phố 6, P. Linh Trung, TP. Thủ Đức, TP.HCM');
+(2, 1, 3190000.00, 'SHIPPING', 'Nguyễn Văn A', '0901234567', 'Khu phố 6, P. Linh Trung, TP. Thủ Đức, TP.HCM'),
+(3, 1, 15680000.00, 'PENDING', 'Nguyễn Văn A', '0901234567', 'Khu phố 6, P. Linh Trung, TP. Thủ Đức, TP.HCM'),
+(4, 1, 2890000.00, 'CANCELLED', 'Nguyễn Văn A', '0901234567', 'Khu phố 6, P. Linh Trung, TP. Thủ Đức, TP.HCM');
 
 INSERT INTO order_details (id, order_id, product_id, quantity, unit_price) VALUES
 (1, 1, 1, 1, 7890000.00),
 (2, 1, 4, 1, 16990000.00),
-(3, 2, 7, 1, 3190000.00);
+(3, 2, 7, 1, 3190000.00),
+(4, 3, 2, 1, 10490000.00),
+(5, 3, 12, 1, 5190000.00),
+(6, 4, 9, 1, 2890000.00);
 
 ALTER TABLE users AUTO_INCREMENT = 100;
 ALTER TABLE categories AUTO_INCREMENT = 100;
