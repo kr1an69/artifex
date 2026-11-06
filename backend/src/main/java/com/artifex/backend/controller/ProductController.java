@@ -69,7 +69,7 @@ public class ProductController {
             @PathVariable Long id,
             @RequestParam("file") MultipartFile file) {
         try {
-            String imageUrl = productService.uploadImage(id, file);
+            String imageUrl = productService.uploadProductImage(id, file);
             return ResponseEntity.ok(ApiResponse.<String>builder()
                     .statusCode(200)
                     .message("Tải ảnh lên thành công")
