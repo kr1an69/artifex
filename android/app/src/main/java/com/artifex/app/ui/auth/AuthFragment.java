@@ -245,14 +245,26 @@ public class AuthFragment extends Fragment {
 
         btnChangePassword.setOnClickListener(v -> showChangePasswordDialog());
 
-        View.OnClickListener orderDevClickListener = v ->
-                Toast.makeText(requireContext(), "Tính năng Đơn mua đang được phát triển!", Toast.LENGTH_SHORT).show();
-
-        if (btnViewAllOrders != null) btnViewAllOrders.setOnClickListener(orderDevClickListener);
-        if (btnOrderPending != null) btnOrderPending.setOnClickListener(orderDevClickListener);
-        if (btnOrderProcessing != null) btnOrderProcessing.setOnClickListener(orderDevClickListener);
-        if (btnOrderShipping != null) btnOrderShipping.setOnClickListener(orderDevClickListener);
-        if (btnOrderCompleted != null) btnOrderCompleted.setOnClickListener(orderDevClickListener);
+        if (btnViewAllOrders != null) {
+            btnViewAllOrders.setOnClickListener(v ->
+                    com.artifex.app.ui.store.OrderHistoryActivity.start(requireContext(), com.artifex.app.ui.store.StoreFragment.FILTER_ALL));
+        }
+        if (btnOrderPending != null) {
+            btnOrderPending.setOnClickListener(v ->
+                    com.artifex.app.ui.store.OrderHistoryActivity.start(requireContext(), com.artifex.app.ui.store.StoreFragment.FILTER_PENDING));
+        }
+        if (btnOrderProcessing != null) {
+            btnOrderProcessing.setOnClickListener(v ->
+                    com.artifex.app.ui.store.OrderHistoryActivity.start(requireContext(), com.artifex.app.ui.store.StoreFragment.FILTER_PENDING));
+        }
+        if (btnOrderShipping != null) {
+            btnOrderShipping.setOnClickListener(v ->
+                    com.artifex.app.ui.store.OrderHistoryActivity.start(requireContext(), com.artifex.app.ui.store.StoreFragment.FILTER_SHIPPING));
+        }
+        if (btnOrderCompleted != null) {
+            btnOrderCompleted.setOnClickListener(v ->
+                    com.artifex.app.ui.store.OrderHistoryActivity.start(requireContext(), com.artifex.app.ui.store.StoreFragment.FILTER_COMPLETED));
+        }
 
         btnLogout.setOnClickListener(v -> showConfirmLogoutDialog());
     }

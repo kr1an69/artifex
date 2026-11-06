@@ -39,4 +39,11 @@ public interface ApiService {
 
     @retrofit2.http.PUT("api/users/{id}/password")
     retrofit2.Call<java.util.Map<String, Object>> changePassword(@retrofit2.http.Path("id") Long id, @retrofit2.http.Body java.util.Map<String, Object> body);
+
+    // ==================== STORE & ORDER HISTORY APIS (Bạn 5) ====================
+    @retrofit2.http.GET("api/orders/user/{userId}")
+    retrofit2.Call<java.util.List<com.artifex.app.ui.store.OrderModel>> getOrderHistoryByUser(@retrofit2.http.Path("userId") Long userId);
+
+    @retrofit2.http.PUT("api/orders/{orderId}/cancel")
+    retrofit2.Call<java.util.Map<String, Object>> cancelOrder(@retrofit2.http.Path("orderId") Long orderId);
 }
