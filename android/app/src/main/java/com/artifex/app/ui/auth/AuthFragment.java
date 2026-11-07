@@ -29,9 +29,19 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.artifex.app.MainActivity;
+import com.artifex.app.data.local.AppDatabase;
+import com.artifex.app.data.local.CartItem;
+import com.artifex.app.ui.catalog.CatalogFragment;
+import com.artifex.app.ui.catalog.ProductAdapter;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import com.google.android.material.bottomnavigation.BottomNavigationView;
+import java.util.ArrayList;
 import com.artifex.app.R;
 import com.artifex.app.api.ApiService;
 import com.artifex.app.api.RetrofitClient;
@@ -76,6 +86,11 @@ public class AuthFragment extends Fragment {
     private ApiService apiService;
     private SharedPrefManager prefManager;
     private FirebaseAuth mAuth;
+
+    // Recommendations (Có thể bạn cũng thích - Shopee Style)
+    private RecyclerView rvRecommendations;
+    private ProgressBar progressRecommendations;
+    private ProductAdapter catalogProductAdapter;
 
     private final ActivityResultLauncher<Intent> imagePickerLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
@@ -154,6 +169,16 @@ public class AuthFragment extends Fragment {
         tvSelectedDefaultBadge = v.findViewById(R.id.tvSelectedDefaultBadge);
         tvSelectedPhone = v.findViewById(R.id.tvSelectedPhone);
         tvSelectedAddressLine = v.findViewById(R.id.tvSelectedAddressLine);
+
+        // Khởi tạo phần Gợi ý "Có thể bạn cũng thích" (Shopee Style)
+        rvRecommendations = v.findViewById(R.id.rvRecommendations);
+        progressRecommendations = v.findViewById(R.id.progressRecommendations);
+        if (rvRecommendations != null) {
+            rvRecommendations.setLayoutManager(new GridLayoutManager(requireContext(), 2));
+            rvRecommendations.setNestedScrollingEnabled(false);
+            catalogProductAdapter = new ProductAdapter(new ArrayList<>(), this::showProductDetailBottomSheet);
+            rvRecommendations.setAdapter(catalogProductAdapter);
+        }
     }
 
     private void setupEvents() {
@@ -323,6 +348,7 @@ public class AuthFragment extends Fragment {
             layoutProfile.setVisibility(View.VISIBLE);
             bindProfileData();
             fetchLatestUserProfile();
+            loadRecommendationProducts();
         } else {
             layoutAuthForm.setVisibility(View.VISIBLE);
             layoutProfile.setVisibility(View.GONE);
@@ -1404,5 +1430,175 @@ public class AuthFragment extends Fragment {
 
         prefManager.saveUser(id, username, email, fullName, phone, address, avatarUrl);
         prefManager.updatePersonalInfo(fullName, email, phone, dob, gender != null ? gender : "Nam");
+    }
+
+    // ==================== RECOMMENDATIONS (CÓ THỂ BẠN CŨNG THÍCH - GỌI TRỰC TIẾP API SÀN THƯƠNG MẠI ĐIỆN TỬ) ====================
+
+    private void loadRecommendationProducts() {
+        if (!isAdded() || !prefManager.isLoggedIn()) return;
+
+        if (progressRecommendations != null) {
+            progressRecommendations.setVisibility(View.VISIBLE);
+        }
+
+        // Gọi trực tiếp API sản phẩm trên sàn thương mại điện tử do bạn phụ trách Backend viết
+        apiService.getProducts(20).enqueue(new Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(@NonNull Call<Map<String, Object>> call, @NonNull Response<Map<String, Object>> response) {
+                if (!isAdded()) return;
+                if (progressRecommendations != null) progressRecommendations.setVisibility(View.GONE);
+
+                if (response.isSuccessful() && response.body() != null) {
+                    try {
+                        Object dataObj = response.body().get("data");
+                        if (dataObj instanceof Map) {
+                            Object contentObj = ((Map<?, ?>) dataObj).get("content");
+                            if (contentObj instanceof List) {
+                                List<?> rawList = (List<?>) contentObj;
+                                List<CatalogFragment.ProductItem> parsedList = parseCatalogProductsFromBackend(rawList);
+                                if (!parsedList.isEmpty() && catalogProductAdapter != null) {
+                                    catalogProductAdapter.updateData(parsedList);
+                                }
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+
+            @Override
+            public void onFailure(@NonNull Call<Map<String, Object>> call, @NonNull Throwable t) {
+                if (!isAdded()) return;
+                if (progressRecommendations != null) progressRecommendations.setVisibility(View.GONE);
+            }
+        });
+    }
+
+    private List<CatalogFragment.ProductItem> parseCatalogProductsFromBackend(List<?> rawList) {
+        List<CatalogFragment.ProductItem> result = new ArrayList<>();
+        String[] badges = new String[]{"-15%", "-10%", "-5%", "HOT", "SALE", "MỚI", "-20%", ""};
+
+        for (int i = 0; i < rawList.size(); i++) {
+            Object item = rawList.get(i);
+            if (item instanceof Map) {
+                Map<?, ?> map = (Map<?, ?>) item;
+                String id = map.get("id") != null ? String.valueOf(map.get("id")) : "p" + (i + 1);
+                String categoryId = "cat_" + (map.get("categoryName") != null ? map.get("categoryName").toString().toLowerCase() : "all");
+                String name = (String) map.get("name");
+                String shortSpec = (String) map.get("description");
+                long price = map.get("price") != null ? ((Number) map.get("price")).longValue() : 0L;
+                String discountBadge = badges[i % badges.length];
+                String imageUrl = (String) map.get("imageUrl");
+
+                result.add(new CatalogFragment.ProductItem(
+                        id,
+                        categoryId,
+                        name != null ? name : "",
+                        shortSpec != null ? shortSpec : "",
+                        price,
+                        discountBadge,
+                        imageUrl != null ? imageUrl : ""
+                ));
+            }
+        }
+        return result;
+    }
+    private void showProductDetailBottomSheet(CatalogFragment.ProductItem product) {
+        if (!isAdded() || product == null) return;
+
+        BottomSheetDialog dialog = new BottomSheetDialog(requireContext());
+        View sheetView = LayoutInflater.from(requireContext()).inflate(R.layout.bottom_sheet_product_preview, null);
+        dialog.setContentView(sheetView);
+
+        ImageView ivPreview = sheetView.findViewById(R.id.ivPreviewImage);
+        TextView tvCategory = sheetView.findViewById(R.id.tvPreviewCategory);
+        TextView tvStock = sheetView.findViewById(R.id.tvPreviewStock);
+        TextView tvName = sheetView.findViewById(R.id.tvPreviewName);
+        TextView tvPrice = sheetView.findViewById(R.id.tvPreviewPrice);
+        TextView tvRatingScore = sheetView.findViewById(R.id.tvPreviewRatingScore);
+        TextView tvReviewCount = sheetView.findViewById(R.id.tvPreviewReviewCount);
+        TextView tvDesc = sheetView.findViewById(R.id.tvPreviewDescription);
+        View btnClose = sheetView.findViewById(R.id.btnClosePreview);
+        View btnAddToCart = sheetView.findViewById(R.id.btnAddToCartPreview);
+        View btnExploreStore = sheetView.findViewById(R.id.btnExploreStorePreview);
+
+        tvName.setText(product.getName());
+
+        DecimalFormatSymbols symbols = new DecimalFormatSymbols(Locale.getDefault());
+        symbols.setGroupingSeparator('.');
+        DecimalFormat formatter = new DecimalFormat("#,### đ", symbols);
+        tvPrice.setText(formatter.format(product.getPrice()));
+
+        tvRatingScore.setText("5.0 / 5.0");
+        tvReviewCount.setText("(12 đánh giá từ khách hàng)");
+        tvDesc.setText(product.getShortSpec() != null && !product.getShortSpec().isEmpty()
+                ? product.getShortSpec() + "\n\nSản phẩm chính hãng trong gian hàng Linh kiện Artifex PC. Bảo hành 36 tháng 1 đổi 1."
+                : "Sản phẩm chính hãng phân phối bởi Artifex PC Gear Store. Bảo hành 36 tháng 1 đổi 1.");
+
+        if (product.getCategoryId() != null && !product.getCategoryId().isEmpty()) {
+            tvCategory.setText(product.getCategoryId().replace("cat_", "").toUpperCase());
+            tvCategory.setVisibility(View.VISIBLE);
+        } else {
+            tvCategory.setVisibility(View.GONE);
+        }
+
+        tvStock.setText("✓ Còn hàng");
+
+        Glide.with(this)
+                .load(product.getImageUrl())
+                .placeholder(R.color.artifex_border)
+                .error(R.color.artifex_border)
+                .centerCrop()
+                .into(ivPreview);
+
+        if (btnClose != null) {
+            btnClose.setOnClickListener(v -> dialog.dismiss());
+        }
+
+        if (btnAddToCart != null) {
+            btnAddToCart.setOnClickListener(v -> {
+                new Thread(() -> {
+                    try {
+                        int productId = 1;
+                        try {
+                            productId = Integer.parseInt(product.getId().replace("p", ""));
+                        } catch (Exception ignored) {}
+
+                        AppDatabase.getInstance(requireContext()).cartDao().insert(new CartItem(
+                                productId,
+                                product.getName(),
+                                product.getPrice(),
+                                1,
+                                product.getImageUrl()
+                        ));
+                        if (getActivity() != null) {
+                            getActivity().runOnUiThread(() -> {
+                                Toast.makeText(requireContext(), "🛍️ Đã thêm " + product.getName() + " vào giỏ hàng!", Toast.LENGTH_SHORT).show();
+                                dialog.dismiss();
+                            });
+                        }
+                    } catch (Exception e) {
+                        if (getActivity() != null) {
+                            getActivity().runOnUiThread(() -> {
+                                Toast.makeText(requireContext(), "Lỗi thêm giỏ hàng: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                            });
+                        }
+                    }
+                }).start();
+            });
+        }
+
+        if (btnExploreStore != null) {
+            btnExploreStore.setOnClickListener(v -> {
+                dialog.dismiss();
+                if (getActivity() instanceof MainActivity) {
+                    BottomNavigationView nav = getActivity().findViewById(R.id.bottom_navigation);
+                    if (nav != null) {
+                        nav.setSelectedItemId(R.id.nav_catalog); // Chuyển sang Tab Linh kiện của bạn Đạt!
+                    }
+                }
+            });
+        }
+
+        dialog.show();
     }
 }
