@@ -19,9 +19,9 @@ import okhttp3.Response;
 
 public class CloudinaryHelper {
 
-    // Thay thế bằng Cloud Name và Unsigned Preset từ tài khoản Cloudinary của bạn:
-    public static final String CLOUD_NAME = "artifex_demo";
-    public static final String UPLOAD_PRESET = "artifex_preset";
+    // Cloud Name và Unsigned Preset từ tài khoản Cloudinary thật của bạn:
+    public static final String CLOUD_NAME = "wpheip7x";
+    public static final String UPLOAD_PRESET = "artifex_avatar";
 
     public interface UploadCallback {
         void onSuccess(String imageUrl);

@@ -23,6 +23,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Activity Lịch sử đơn hàng (Bạn 5) -->
+        <activity
+            android:name=".ui.store.OrderHistoryActivity"
+            android:exported="false" />
     </application>
 
 </manifest>
