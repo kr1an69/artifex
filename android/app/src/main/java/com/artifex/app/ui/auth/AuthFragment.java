@@ -571,10 +571,14 @@ public class AuthFragment extends Fragment {
 
     private void handleLogin() {
         String phone = etPhone.getText() != null ? etPhone.getText().toString().trim() : "";
-        String password = etPassword.getText() != null ? etPassword.getText().toString().trim() : "";
+        String password = etPassword.getText() != null ? etPassword.getText().toString() : "";
 
         if (normalizeLoginPhone(phone).isEmpty() || password.isEmpty()) {
             Toast.makeText(requireContext(), "Vui lòng nhập số điện thoại hợp lệ và mật khẩu", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (containsWhitespace(password)) {
+            Toast.makeText(requireContext(), "Mật khẩu không được chứa khoảng trắng!", Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -623,13 +627,23 @@ public class AuthFragment extends Fragment {
         return trimmed.matches("^[a-zA-Z0-9._%+-]+@gmail\\.com$");
     }
 
+    private boolean containsWhitespace(String text) {
+        if (text == null) return false;
+        for (int i = 0; i < text.length(); i++) {
+            if (Character.isWhitespace(text.charAt(i))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void handleRegister() {
         String fullName = etFullName.getText() != null ? etFullName.getText().toString().trim() : "";
         String email = etEmail.getText() != null ? etEmail.getText().toString().trim().toLowerCase() : "";
         String phone = (etPhone != null && etPhone.getText() != null) ? etPhone.getText().toString().trim() : "";
-        String password = etPassword.getText() != null ? etPassword.getText().toString().trim() : "";
+        String password = etPassword.getText() != null ? etPassword.getText().toString() : "";
         String confirmPassword = (etConfirmPassword != null && etConfirmPassword.getText() != null)
-                ? etConfirmPassword.getText().toString().trim() : "";
+                ? etConfirmPassword.getText().toString() : "";
 
         if (fullName.isEmpty() || email.isEmpty() || phone.isEmpty() || password.isEmpty() || confirmPassword.isEmpty()) {
             Toast.makeText(requireContext(), "Vui lòng nhập đầy đủ tất cả thông tin!", Toast.LENGTH_SHORT).show();
@@ -655,6 +669,11 @@ public class AuthFragment extends Fragment {
         String cleanPhone = normalizeLoginPhone(phone);
         if (cleanPhone.length() != 10 || !cleanPhone.startsWith("0")) {
             Toast.makeText(requireContext(), "Số điện thoại không hợp lệ! Vui lòng nhập đúng 10 số (ví dụ: 09xxxxxxxx) để nhận SMS OTP.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (containsWhitespace(password) || containsWhitespace(confirmPassword)) {
+            Toast.makeText(requireContext(), "Mật khẩu không được chứa khoảng trắng!", Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -1062,11 +1081,16 @@ public class AuthFragment extends Fragment {
         // BƯỚC 2: Bấm "Đổi mật khẩu"
         btnSubmitForgotPass.setOnClickListener(v -> {
             String otpInput = etForgotOtpCode.getText() != null ? etForgotOtpCode.getText().toString().trim() : "";
-            String newPass = etNewPassword.getText() != null ? etNewPassword.getText().toString().trim() : "";
-            String confirmPass = etConfirmPassword.getText() != null ? etConfirmPassword.getText().toString().trim() : "";
+            String newPass = etNewPassword.getText() != null ? etNewPassword.getText().toString() : "";
+            String confirmPass = etConfirmPassword.getText() != null ? etConfirmPassword.getText().toString() : "";
 
             if (otpInput.length() != 6) {
                 Toast.makeText(requireContext(), "Vui lòng nhập đủ 6 chữ số mã OTP!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (containsWhitespace(newPass)) {
+                Toast.makeText(requireContext(), "Mật khẩu không được chứa khoảng trắng!", Toast.LENGTH_SHORT).show();
                 return;
             }
 
@@ -1362,12 +1386,17 @@ public class AuthFragment extends Fragment {
         btnCancel.setOnClickListener(v -> dialog.dismiss());
 
         btnSubmit.setOnClickListener(v -> {
-            String oldPass = etOldPassword.getText() != null ? etOldPassword.getText().toString().trim() : "";
-            String newPass = etNewPassword.getText() != null ? etNewPassword.getText().toString().trim() : "";
-            String confirmNewPass = etConfirmNewPassword.getText() != null ? etConfirmNewPassword.getText().toString().trim() : "";
+            String oldPass = etOldPassword.getText() != null ? etOldPassword.getText().toString() : "";
+            String newPass = etNewPassword.getText() != null ? etNewPassword.getText().toString() : "";
+            String confirmNewPass = etConfirmNewPassword.getText() != null ? etConfirmNewPassword.getText().toString() : "";
 
             if (oldPass.isEmpty() || newPass.isEmpty() || confirmNewPass.isEmpty()) {
                 Toast.makeText(requireContext(), "Vui lòng nhập đầy đủ thông tin!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (containsWhitespace(newPass)) {
+                Toast.makeText(requireContext(), "Mật khẩu không được chứa khoảng trắng!", Toast.LENGTH_SHORT).show();
                 return;
             }
 
