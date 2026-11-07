@@ -240,6 +240,17 @@ public class AuthFragment extends Fragment {
                 .setMessage("Bạn có chắc chắn muốn đăng xuất khỏi tài khoản hiện tại không?")
                 .setNegativeButton("Hủy", (dialog, which) -> dialog.dismiss())
                 .setPositiveButton("Đăng xuất", (dialog, which) -> {
+                    String token = prefManager.getAuthToken();
+                    if (token != null && !token.trim().isEmpty()) {
+                        String authHeader = "Bearer " + token.trim();
+                        apiService.logout(authHeader).enqueue(new Callback<Map<String, Object>>() {
+                            @Override
+                            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {}
+
+                            @Override
+                            public void onFailure(Call<Map<String, Object>> call, Throwable t) {}
+                        });
+                    }
                     prefManager.clear();
                     mAuth = FirebaseAuthHelper.getFirebaseAuth(requireContext());
                     if (mAuth != null) {
