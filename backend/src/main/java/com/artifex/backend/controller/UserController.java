@@ -3,6 +3,7 @@ package com.artifex.backend.controller;
 import com.artifex.backend.dto.AuthDTO.*;
 import com.artifex.backend.entity.User;
 import com.artifex.backend.repository.UserRepository;
+import com.artifex.backend.service.PasswordUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -37,7 +38,6 @@ public class UserController {
         }
 
         User user = userOpt.get();
-        user.setPassword(null);
 
         response.put("status", "SUCCESS");
         response.put("user", user);
@@ -107,7 +107,6 @@ public class UserController {
         }
 
         User updatedUser = userRepository.save(user);
-        updatedUser.setPassword(null);
 
         response.put("status", "SUCCESS");
         response.put("message", "Cập nhật thông tin thành công!");
@@ -141,7 +140,6 @@ public class UserController {
         user.setAvatarUrl(request.getAvatarUrl().trim());
 
         User updatedUser = userRepository.save(user);
-        updatedUser.setPassword(null);
 
         response.put("status", "SUCCESS");
         response.put("message", "Cập nhật ảnh đại diện thành công!");
@@ -168,28 +166,36 @@ public class UserController {
         User user = userOpt.get();
 
         // Kiểm tra chặn nếu là tài khoản đăng nhập qua Google
-        if ("FIREBASE_AUTH".equals(user.getPassword())) {
+        if (PasswordUtils.isFirebaseOnlyAccount(user.getPassword())) {
             response.put("status", "ERROR");
             response.put("message", "Tài khoản liên kết Google không sử dụng mật khẩu này!");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
-        // Validate dữ liệu đầu vào
-        if (request.getOldPassword() == null || request.getNewPassword() == null ||
-            request.getNewPassword().trim().length() < 6) {
+        // Validate dữ liệu đầu vào (KHÔNG trim mật khẩu để đồng nhất toàn hệ thống)
+        String oldPassword = request.getOldPassword();
+        String newPassword = request.getNewPassword();
+        if (oldPassword == null || oldPassword.isEmpty()) {
             response.put("status", "ERROR");
-            response.put("message", "Mật khẩu mới phải có ít nhất 6 ký tự!");
+            response.put("message", "Vui lòng nhập mật khẩu hiện tại!");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+
+        String passwordError = PasswordUtils.validateRawPassword(newPassword);
+        if (passwordError != null) {
+            response.put("status", "ERROR");
+            response.put("message", passwordError);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
         // Kiểm tra khớp mật khẩu cũ
-        if (!user.getPassword().equals(request.getOldPassword().trim())) {
+        if (!PasswordUtils.matches(oldPassword, user.getPassword())) {
             response.put("status", "ERROR");
             response.put("message", "Mật khẩu hiện tại không chính xác!");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
-        user.setPassword(request.getNewPassword().trim());
+        user.setPassword(PasswordUtils.hash(newPassword));
         userRepository.save(user);
 
         response.put("status", "SUCCESS");

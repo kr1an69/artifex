@@ -1,0 +1,272 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_circle_primary"
+    android:backgroundTint="@color/artifex_surface"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <!-- Thanh kéo BottomSheet (Drag Handle) -->
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginBottom="16dp"
+        android:background="@drawable/bg_circle_primary"
+        android:backgroundTint="@color/artifex_border" />
+
+    <!-- Tiêu đề Header & Nút Đóng -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:fontFamily="@font/oxanium_bold"
+            android:text="CHI TIẾT SẢN PHẨM"
+            android:textColor="@color/artifex_primary"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/btnClosePreview"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true"
+            android:padding="4dp"
+            android:src="@drawable/ic_close" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:maxHeight="420dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- Ảnh lớn sản phẩm có bo góc -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="180dp"
+                app:cardCornerRadius="14dp"
+                app:cardElevation="0dp"
+                app:strokeColor="@color/artifex_border"
+                app:strokeWidth="1dp">
+
+                <ImageView
+                    android:id="@+id/ivPreviewImage"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@color/artifex_surface_variant"
+                    android:scaleType="centerCrop"
+                    tools:src="@color/artifex_border" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Hàng các huy hiệu Tag -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvPreviewCategory"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_circle_primary"
+                    android:backgroundTint="@color/artifex_primary"
+                    android:paddingStart="8dp"
+                    android:paddingTop="3dp"
+                    android:paddingEnd="8dp"
+                    android:paddingBottom="3dp"
+                    android:textColor="@color/artifex_on_primary"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    tools:text="CPU" />
+
+                <TextView
+                    android:id="@+id/tvPreviewStock"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/bg_circle_primary"
+                    android:backgroundTint="@color/artifex_surface_variant"
+                    android:paddingStart="8dp"
+                    android:paddingTop="3dp"
+                    android:paddingEnd="8dp"
+                    android:paddingBottom="3dp"
+                    android:textColor="@color/artifex_success"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    tools:text="✓ Còn hàng: 25 cái" />
+
+                <TextView
+                    android:id="@+id/tvPreviewMallBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/bg_circle_primary"
+                    android:backgroundTint="@color/artifex_accent"
+                    android:paddingStart="8dp"
+                    android:paddingTop="3dp"
+                    android:paddingEnd="8dp"
+                    android:paddingBottom="3dp"
+                    android:text="★ ARTIFEX MALL"
+                    android:textColor="@color/white"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Tên sản phẩm -->
+            <TextView
+                android:id="@+id/tvPreviewName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:textColor="@color/artifex_text_primary"
+                android:textSize="17sp"
+                android:textStyle="bold"
+                tools:text="Intel Core i5-13600K 14 Nhân 20 Luồng" />
+
+            <!-- Giá tiền -->
+            <TextView
+                android:id="@+id/tvPreviewPrice"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/artifex_error"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                tools:text="7.890.000 đ" />
+
+            <!-- Đánh giá sao -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="14dp"
+                    android:layout_height="14dp"
+                    android:src="@drawable/ic_star_filled" />
+
+                <TextView
+                    android:id="@+id/tvPreviewRatingScore"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:textColor="@color/artifex_text_primary"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    tools:text="5.0 / 5.0" />
+
+                <TextView
+                    android:id="@+id/tvPreviewReviewCount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:textColor="@color/artifex_text_secondary"
+                    android:textSize="12sp"
+                    tools:text="(2 đánh giá từ khách hàng)" />
+            </LinearLayout>
+
+            <!-- Đường phân cách -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="12dp"
+                android:background="@color/artifex_border" />
+
+            <!-- Tiêu đề mô tả -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Mô tả &amp; Thông số sản phẩm"
+                android:textColor="@color/artifex_text_primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <!-- Nội dung mô tả -->
+            <TextView
+                android:id="@+id/tvPreviewDescription"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:lineSpacingExtra="4dp"
+                android:textColor="@color/artifex_text_secondary"
+                android:textSize="13sp"
+                tools:text="14 nhân (6 P-Core + 8 E-Core), 20 luồng, xung nhịp turbo lên tới 5.1 GHz. Tối ưu hoàn hảo cho cả Gaming và Render đồ họa nặng." />
+
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Đường phân cách trước nút bấm -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="14dp"
+        android:layout_marginBottom="14dp"
+        android:background="@color/artifex_border" />
+
+    <!-- 2 Nút thao tác -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <!-- Nút Thêm Vào Giỏ Hàng -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAddToCartPreview"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginEnd="8dp"
+            android:layout_weight="1"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="+ Giỏ hàng"
+            android:textAllCaps="false"
+            android:textColor="@color/artifex_primary"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            app:cornerRadius="12dp"
+            app:strokeColor="@color/artifex_primary"
+            app:strokeWidth="1.5dp" />
+
+        <!-- Nút Khám Phá Trên Sàn Thương Mại Điện Tử -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnExploreStorePreview"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1.2"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="Xem trên sàn 🛍️"
+            android:textAllCaps="false"
+            android:textColor="@color/artifex_on_primary"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            app:backgroundTint="@color/artifex_primary"
+            app:cornerRadius="12dp" />
+    </LinearLayout>
+
+</LinearLayout>
