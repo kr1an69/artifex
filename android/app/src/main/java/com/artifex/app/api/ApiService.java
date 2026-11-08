@@ -33,6 +33,12 @@ public interface ApiService {
     @retrofit2.http.POST("api/auth/firebase")
     retrofit2.Call<java.util.Map<String, Object>> firebaseLogin(@retrofit2.http.Body java.util.Map<String, Object> body);
 
+    @retrofit2.http.POST("api/auth/logout")
+    retrofit2.Call<java.util.Map<String, Object>> logout();
+
+    @retrofit2.http.POST("api/auth/logout")
+    retrofit2.Call<java.util.Map<String, Object>> logout(@retrofit2.http.Header("Authorization") String authHeader);
+
     @retrofit2.http.POST("api/auth/forgot-password/send-otp")
     retrofit2.Call<java.util.Map<String, Object>> requestForgotPasswordOtp(@retrofit2.http.Body java.util.Map<String, Object> body);
 
@@ -57,6 +63,13 @@ public interface ApiService {
 
     @retrofit2.http.PUT("api/orders/{orderId}/cancel")
     retrofit2.Call<java.util.Map<String, Object>> cancelOrder(@retrofit2.http.Path("orderId") Long orderId);
+
+    // ==================== PRODUCTS & RECOMMENDATION APIS (Đạt) ====================
+    @retrofit2.http.GET("api/products")
+    retrofit2.Call<java.util.Map<String, Object>> getProducts(@retrofit2.http.Query("size") int size);
+
+    @retrofit2.http.GET("api/products/{id}")
+    retrofit2.Call<java.util.Map<String, Object>> getProductById(@retrofit2.http.Path("id") Long id);
 
     // ==================== REVIEW & RATING APIS (Đức) ====================
     @GET("api/reviews/product/{productId}")

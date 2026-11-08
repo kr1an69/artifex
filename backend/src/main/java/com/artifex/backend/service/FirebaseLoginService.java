@@ -49,7 +49,7 @@ public class FirebaseLoginService {
             String picture = token.getPicture();
             user = users.saveAndFlush(User.builder()
                     .firebaseUid(uid).username("fb_" + UUID.randomUUID())
-                    .email(email).password("FIREBASE_AUTH")
+                    .email(email).password(PasswordUtils.FIREBASE_PLACEHOLDER)
                     .fullName(name.substring(0, Math.min(name.length(), 100)))
                     .avatarUrl(picture != null && picture.length() <= 500 ? picture : null)
                     .role("USER").build());

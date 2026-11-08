@@ -3,6 +3,7 @@ package com.artifex.backend.controller;
 import com.artifex.backend.dto.AuthDTO.*;
 import com.artifex.backend.entity.User;
 import com.artifex.backend.repository.UserRepository;
+import com.artifex.backend.service.PasswordUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -144,9 +145,10 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
-        if (password.length() < 6) {
+        String passwordError = PasswordUtils.validateRawPassword(password);
+        if (passwordError != null) {
             response.put("status", "ERROR");
-            response.put("message", "Mật khẩu phải có ít nhất 6 ký tự!");
+            response.put("message", passwordError);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
@@ -210,7 +212,7 @@ public class AuthController {
         User newUser = User.builder()
                 .username("phone_" + java.util.UUID.randomUUID())
                 .email(email)
-                .password(password)
+                .password(PasswordUtils.hash(password))
                 .fullName(fullName)
                 .phone(domesticPhone)
                 .address(request.getAddress() != null ? request.getAddress().trim() : null)
@@ -219,7 +221,6 @@ public class AuthController {
                 .build();
 
         User savedUser = userRepository.save(newUser);
-        savedUser.setPassword(null);
 
         String token = tokenService.generateToken(savedUser.getId(), savedUser.getRole());
 
@@ -244,16 +245,21 @@ public class AuthController {
         Optional<User> userOpt = isPhoneNumber(input)
                 ? findUserByNormalizedPhone(input) : Optional.empty();
 
-        if (userOpt.isEmpty() || userOpt.get().getPassword() == null
-                || "FIREBASE_AUTH".equals(userOpt.get().getPassword())
-                || !userOpt.get().getPassword().equals(request.getPassword())) {
+        if (userOpt.isEmpty() || !PasswordUtils.matches(request.getPassword(), userOpt.get().getPassword())) {
             response.put("status", "ERROR");
             response.put("message", "Số điện thoại hoặc mật khẩu không chính xác!");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
         }
 
         User user = userOpt.get();
-        user.setPassword(null);
+        // Tự động nâng cấp mật khẩu plaintext mẫu (ví dụ từ seed_data.sql) lên BCrypt khi đăng nhập thành công
+        if (!PasswordUtils.isBcryptHash(user.getPassword())) {
+            user.setPassword(PasswordUtils.hash(request.getPassword()));
+            User saved = userRepository.save(user);
+            if (saved != null) {
+                user = saved;
+            }
+        }
 
         String token = tokenService.generateToken(user.getId(), user.getRole());
 
@@ -293,7 +299,7 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
         Optional<User> userOpt = findUserByNormalizedPhone(contactInput);
-        if (userOpt.isEmpty() || "FIREBASE_AUTH".equals(userOpt.get().getPassword())) {
+        if (userOpt.isEmpty() || PasswordUtils.isFirebaseOnlyAccount(userOpt.get().getPassword())) {
             response.put("status", "ERROR");
             response.put("message", "Không tìm thấy tài khoản dùng mật khẩu với số điện thoại này!");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
@@ -346,7 +352,7 @@ public class AuthController {
 
         String phoneInput = request.getPhone() != null ? request.getPhone().trim() : "";
         String otpInput = request.getOtp() != null ? request.getOtp().trim() : "";
-        String newPassword = request.getNewPassword() != null ? request.getNewPassword().trim() : "";
+        String newPassword = request.getNewPassword() != null ? request.getNewPassword() : "";
 
         if (!isPhoneNumber(phoneInput) || otpInput.isEmpty() || newPassword.isEmpty()) {
             response.put("status", "ERROR");
@@ -354,9 +360,10 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
-        if (newPassword.length() < 6) {
+        String passwordError = PasswordUtils.validateRawPassword(newPassword);
+        if (passwordError != null) {
             response.put("status", "ERROR");
-            response.put("message", "Mật khẩu mới phải có ít nhất 6 ký tự!");
+            response.put("message", passwordError);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
@@ -370,6 +377,11 @@ public class AuthController {
         }
 
         User user = userOpt.get();
+        if (PasswordUtils.isFirebaseOnlyAccount(user.getPassword())) {
+            response.put("status", "ERROR");
+            response.put("message", "Tài khoản liên kết Google không sử dụng mật khẩu này!");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
         String key = "reset:" + normalizeVietnamPhone(user.getPhone());
         OtpRecord record = otpStorage.get(key);
 
@@ -400,10 +412,9 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
-        user.setPassword(newPassword);
+        user.setPassword(PasswordUtils.hash(newPassword));
         User savedUser = userRepository.save(user);
         otpStorage.remove(key);
-        savedUser.setPassword(null);
 
         String token = tokenService.generateToken(savedUser.getId(), savedUser.getRole());
 
