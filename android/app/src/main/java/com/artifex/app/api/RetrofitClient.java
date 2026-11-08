@@ -39,7 +39,8 @@ public class RetrofitClient {
     public static Retrofit getClient() {
         if (retrofit == null) {
             HttpLoggingInterceptor logging = new HttpLoggingInterceptor();
-            logging.setLevel(HttpLoggingInterceptor.Level.BODY);
+            // Auth bodies contain passwords and Firebase ID tokens.
+            logging.setLevel(HttpLoggingInterceptor.Level.BASIC);
 
             Interceptor fallbackInterceptor = new Interceptor() {
                 @Override
@@ -85,10 +86,26 @@ public class RetrofitClient {
                 }
             };
 
+            Interceptor authInterceptor = new Interceptor() {
+                @Override
+                public Response intercept(Chain chain) throws IOException {
+                    Request original = chain.request();
+                    String token = com.artifex.app.ui.auth.SharedPrefManager.getAuthTokenStatic();
+                    if (token != null && !token.trim().isEmpty() && original.header("Authorization") == null) {
+                        Request authRequest = original.newBuilder()
+                                .header("Authorization", "Bearer " + token.trim())
+                                .build();
+                        return chain.proceed(authRequest);
+                    }
+                    return chain.proceed(original);
+                }
+            };
+
             OkHttpClient client = new OkHttpClient.Builder()
                     .connectTimeout(2, TimeUnit.SECONDS)
                     .readTimeout(15, TimeUnit.SECONDS)
                     .writeTimeout(15, TimeUnit.SECONDS)
+                    .addInterceptor(authInterceptor)
                     .addInterceptor(fallbackInterceptor)
                     .addInterceptor(logging)
                     .build();

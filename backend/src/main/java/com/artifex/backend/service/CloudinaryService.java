@@ -20,6 +20,14 @@ public class CloudinaryService {
      * Returns the secure public URL of the uploaded image.
      */
     public String uploadImage(MultipartFile file) throws IOException {
+        return uploadImage(file, "artifex/reviews");
+    }
+    
+    /**
+     * Upload an image file to Cloudinary under the specified folder.
+     * Returns the secure public URL of the uploaded image.
+     */
+    public String uploadImage(MultipartFile file, String folder) throws IOException {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("File cannot be empty");
         }
@@ -27,7 +35,7 @@ public class CloudinaryService {
         Map<?, ?> uploadResult = cloudinary.uploader().upload(
                 file.getBytes(),
                 ObjectUtils.asMap(
-                        "folder", "artifex/reviews",
+                        "folder", folder,
                         "resource_type", "image"
                 )
         );
