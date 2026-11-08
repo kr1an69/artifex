@@ -46,17 +46,13 @@ public interface ApiService {
     @retrofit2.http.PUT("api/users/{id}/password")
     retrofit2.Call<java.util.Map<String, Object>> changePassword(@retrofit2.http.Path("id") Long id, @retrofit2.http.Body java.util.Map<String, Object> body);
 
+    @retrofit2.http.GET("api/products")
+    retrofit2.Call<java.util.Map<String, Object>> getAuthRecommendedProducts(@retrofit2.http.Query("size") int size);
+
     // ==================== STORE & ORDER HISTORY APIS (Bạn 5) ====================
     @retrofit2.http.GET("api/orders/user/{userId}")
     retrofit2.Call<java.util.List<com.artifex.app.ui.store.OrderModel>> getOrderHistoryByUser(@retrofit2.http.Path("userId") Long userId);
 
     @retrofit2.http.PUT("api/orders/{orderId}/cancel")
     retrofit2.Call<java.util.Map<String, Object>> cancelOrder(@retrofit2.http.Path("orderId") Long orderId);
-
-    // ==================== PRODUCTS & RECOMMENDATION APIS ====================
-    @retrofit2.http.GET("api/products")
-    retrofit2.Call<java.util.Map<String, Object>> getProducts(@retrofit2.http.Query("size") int size);
-
-    @retrofit2.http.GET("api/products/{id}")
-    retrofit2.Call<java.util.Map<String, Object>> getProductById(@retrofit2.http.Path("id") Long id);
 }

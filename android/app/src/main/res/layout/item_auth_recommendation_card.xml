@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="4dp"
+    android:clickable="true"
+    android:focusable="true"
+    app:cardBackgroundColor="@color/artifex_surface"
+    app:cardCornerRadius="14dp"
+    app:cardElevation="0dp"
+    app:strokeColor="@color/artifex_border"
+    app:strokeWidth="1dp">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <ImageView
+            android:id="@+id/ivRecProduct"
+            android:layout_width="0dp"
+            android:layout_height="140dp"
+            android:background="@color/artifex_surface_variant"
+            android:contentDescription="Ảnh linh kiện gợi ý"
+            android:scaleType="centerCrop"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:src="@color/artifex_border" />
+
+        <TextView
+            android:id="@+id/tvRecBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_badge_pill"
+            android:backgroundTint="@color/artifex_accent"
+            android:paddingStart="8dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="4dp"
+            android:textColor="@color/artifex_on_accent"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:text="CPU" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="12dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/ivRecProduct">
+
+            <TextView
+                android:id="@+id/tvRecName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="2"
+                android:minLines="2"
+                android:textColor="@color/artifex_text_primary"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                tools:text="Intel Core i5-13600K" />
+
+            <TextView
+                android:id="@+id/tvRecSpec"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/artifex_text_secondary"
+                android:textSize="12sp"
+                tools:text="14 nhân, 20 luồng, 5.1 GHz" />
+
+            <TextView
+                android:id="@+id/tvRecPrice"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textColor="@color/artifex_primary"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                tools:text="7.890.000 đ" />
+
+        </LinearLayout>
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</com.google.android.material.card.MaterialCardView>

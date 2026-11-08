@@ -110,4 +110,30 @@ class UserAuthorizationTest {
         org.junit.jupiter.api.Assertions.assertTrue(PasswordUtils.isBcryptHash(existingUser.getPassword()));
         org.junit.jupiter.api.Assertions.assertTrue(PasswordUtils.matches("FIREBASE_AUTH", existingUser.getPassword()));
     }
+
+    @Test
+    void seedUserWithArtifexEmailCanUpdateProfile() {
+        String user1Token = tokenService.generateToken(1L, "USER");
+        User seedUser = User.builder()
+                .id(1L)
+                .username("nguyenvana")
+                .fullName("Nguyễn Văn A")
+                .email("vana@artifex.vn")
+                .phone("0901234567")
+                .password("123456")
+                .role("USER")
+                .build();
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(seedUser));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UpdateProfileRequest request = new UpdateProfileRequest();
+        request.setFullName("Nguyễn Văn A Mới");
+        request.setEmail("vana@artifex.vn");
+        request.setPhone("0901234567");
+
+        ResponseEntity<Map<String, Object>> response = userController.updateProfile(1L, "Bearer " + user1Token, request);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("SUCCESS", response.getBody().get("status"));
+    }
 }

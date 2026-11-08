@@ -63,12 +63,13 @@ public class UserController {
         User user = userOpt.get();
         if (request.getEmail() != null && !request.getEmail().trim().isEmpty()) {
             String newEmail = request.getEmail().trim().toLowerCase();
-            if (!newEmail.endsWith("@gmail.com")) {
+            boolean unchangedExistingEmail = user.getEmail() != null && newEmail.equalsIgnoreCase(user.getEmail());
+            if (!unchangedExistingEmail && !newEmail.matches("^[a-zA-Z0-9._%+-]+@(gmail\\.com|artifex\\.vn)$")) {
                 response.put("status", "ERROR");
-                response.put("message", "Email phải có định dạng @gmail.com!");
+                response.put("message", "Email phải có định dạng hợp lệ (@gmail.com hoặc @artifex.vn)!");
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
             }
-            if (!newEmail.equals(user.getEmail()) && userRepository.existsByEmail(newEmail)) {
+            if (!newEmail.equalsIgnoreCase(user.getEmail()) && userRepository.existsByEmail(newEmail)) {
                 response.put("status", "ERROR");
                 response.put("message", "Email đã được sử dụng bởi tài khoản khác!");
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
