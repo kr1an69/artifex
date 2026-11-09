@@ -1,9 +1,11 @@
 package com.artifex.app.data.local;
 
 import androidx.room.Entity;
+import androidx.room.Index;
 import androidx.room.PrimaryKey;
 
-@Entity(tableName = "cart_items")
+// productId la unique: moi san pham chi co 1 dong trong gio, them lai se cong don so luong
+@Entity(tableName = "cart_items", indices = {@Index(value = "productId", unique = true)})
 public class CartItem {
 
     @PrimaryKey(autoGenerate = true)
