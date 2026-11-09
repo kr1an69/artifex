@@ -4,6 +4,7 @@ import com.artifex.backend.dto.AuthDTO.ChangePasswordRequest;
 import com.artifex.backend.dto.AuthDTO.UpdateProfileRequest;
 import com.artifex.backend.entity.User;
 import com.artifex.backend.repository.UserRepository;
+import com.artifex.backend.service.CloudinaryService;
 import com.artifex.backend.service.PasswordUtils;
 import com.artifex.backend.service.TokenService;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,13 +22,15 @@ class UserAuthorizationTest {
 
     private UserRepository userRepository;
     private TokenService tokenService;
+    private CloudinaryService cloudinaryService;
     private UserController userController;
 
     @BeforeEach
     void setup() {
         userRepository = mock(UserRepository.class);
         tokenService = new TokenService();
-        userController = new UserController(userRepository, tokenService);
+        cloudinaryService = mock(CloudinaryService.class);
+        userController = new UserController(userRepository, tokenService, cloudinaryService);
     }
 
     @Test
@@ -135,5 +138,34 @@ class UserAuthorizationTest {
         ResponseEntity<Map<String, Object>> response = userController.updateProfile(1L, "Bearer " + user1Token, request);
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals("SUCCESS", response.getBody().get("status"));
+    }
+
+    @Test
+    void uploadAvatarFileSucceeds() throws Exception {
+        String user1Token = tokenService.generateToken(1L, "USER");
+        User existingUser = User.builder()
+                .id(1L)
+                .username("user1")
+                .fullName("User One")
+                .email("user1@gmail.com")
+                .password("123456")
+                .role("USER")
+                .avatarUrl("old_url")
+                .build();
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(existingUser));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        org.springframework.web.multipart.MultipartFile mockFile = mock(org.springframework.web.multipart.MultipartFile.class);
+        when(mockFile.isEmpty()).thenReturn(false);
+        when(cloudinaryService.uploadImage(mockFile, "artifex/avatars")).thenReturn("https://res.cloudinary.com/demo/image/upload/new_avatar.jpg");
+
+        ResponseEntity<Map<String, Object>> response = userController.uploadAvatarFile(1L, "Bearer " + user1Token, mockFile);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("SUCCESS", response.getBody().get("status"));
+        assertEquals("https://res.cloudinary.com/demo/image/upload/new_avatar.jpg", response.getBody().get("avatarUrl"));
+        assertEquals("https://res.cloudinary.com/demo/image/upload/new_avatar.jpg", existingUser.getAvatarUrl());
+        verify(userRepository).save(existingUser);
     }
 }

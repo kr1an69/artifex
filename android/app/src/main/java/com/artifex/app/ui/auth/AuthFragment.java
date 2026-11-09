@@ -1164,6 +1164,40 @@ public class AuthFragment extends Fragment {
 
     private void uploadAvatarToCloudinary(Uri imageUri) {
         progressBar.setVisibility(View.VISIBLE);
+        Long userId = prefManager.getUserId();
+
+        // 1. Thử gửi file ảnh qua API Backend Spring Boot (sử dụng Cloudinary Java SDK của Backend)
+        okhttp3.MultipartBody.Part filePart = CloudinaryHelper.prepareFilePart(requireContext(), imageUri, "file");
+        if (filePart != null) {
+            apiService.uploadAvatarFile(userId, filePart).enqueue(new Callback<Map<String, Object>>() {
+                @Override
+                public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                    if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
+                        progressBar.setVisibility(View.GONE);
+                        String newAvatarUrl = (String) response.body().get("avatarUrl");
+                        if (newAvatarUrl != null) {
+                            prefManager.updateAvatarUrl(newAvatarUrl);
+                            Glide.with(AuthFragment.this).load(newAvatarUrl).circleCrop().into(ivAvatar);
+                        }
+                        Toast.makeText(requireContext(), "Tải ảnh đại diện qua máy chủ Artifex thành công!", Toast.LENGTH_SHORT).show();
+                    } else {
+                        // Nếu backend chưa cấu hình Cloudinary Secret thật hoặc lỗi -> fallback sang client upload
+                        uploadAvatarDirectlyToCloudinary(imageUri);
+                    }
+                }
+
+                @Override
+                public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                    // Nếu lỗi kết nối máy chủ -> tự động fallback sang client upload
+                    uploadAvatarDirectlyToCloudinary(imageUri);
+                }
+            });
+        } else {
+            uploadAvatarDirectlyToCloudinary(imageUri);
+        }
+    }
+
+    private void uploadAvatarDirectlyToCloudinary(Uri imageUri) {
         CloudinaryHelper.uploadImage(requireContext(), imageUri, new CloudinaryHelper.UploadCallback() {
             @Override
             public void onSuccess(String imageUrl) {

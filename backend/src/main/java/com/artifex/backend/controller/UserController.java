@@ -6,9 +6,12 @@ import com.artifex.backend.repository.UserRepository;
 import com.artifex.backend.service.PasswordUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -21,6 +24,7 @@ public class UserController {
 
     private final UserRepository userRepository;
     private final com.artifex.backend.service.TokenService tokenService;
+    private final com.artifex.backend.service.CloudinaryService cloudinaryService;
 
     @GetMapping("/{id}")
     public ResponseEntity<Map<String, Object>> getUserById(@PathVariable Long id,
@@ -146,6 +150,55 @@ public class UserController {
         response.put("message", "Cập nhật ảnh đại diện thành công!");
         response.put("user", updatedUser);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Tải file ảnh trực tiếp lên Cloudinary thông qua Cloudinary Java SDK của Spring Boot backend.
+     * Lưu URL trả về vào cơ sở dữ liệu MySQL và trả về thông tin User mới nhất.
+     * POST /api/users/{id}/avatar/upload
+     */
+    @PostMapping(value = "/{id}/avatar/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, Object>> uploadAvatarFile(@PathVariable Long id,
+                                                                @RequestHeader(value = "Authorization", required = false) String authHeader,
+                                                                @RequestParam("file") MultipartFile file) {
+        ResponseEntity<Map<String, Object>> authError = verifyUserAuthorization(id, authHeader);
+        if (authError != null) return authError;
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        Optional<User> userOpt = userRepository.findById(id);
+
+        if (userOpt.isEmpty()) {
+            response.put("status", "ERROR");
+            response.put("message", "Không tìm thấy người dùng!");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+        }
+
+        if (file == null || file.isEmpty()) {
+            response.put("status", "ERROR");
+            response.put("message", "Vui lòng chọn tệp ảnh để tải lên!");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+
+        try {
+            String uploadedUrl = cloudinaryService.uploadImage(file, "artifex/avatars");
+            User user = userOpt.get();
+            user.setAvatarUrl(uploadedUrl);
+            User updatedUser = userRepository.save(user);
+
+            response.put("status", "SUCCESS");
+            response.put("message", "Tải lên và cập nhật ảnh đại diện thành công!");
+            response.put("avatarUrl", uploadedUrl);
+            response.put("user", updatedUser);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            response.put("status", "ERROR");
+            response.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        } catch (IOException e) {
+            response.put("status", "ERROR");
+            response.put("message", "Lỗi upload ảnh lên Cloudinary: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
     }
 
     @PutMapping("/{id}/password")
