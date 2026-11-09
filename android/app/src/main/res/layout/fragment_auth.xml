@@ -21,15 +21,24 @@
             android:orientation="vertical"
             android:visibility="visible">
 
+            <ImageView
+                android:id="@+id/ivBrandLogo"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="16dp"
+                android:contentDescription="@string/app_name"
+                android:src="@drawable/ic_logo_auth" />
+
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_horizontal"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="8dp"
                 android:fontFamily="@font/oxanium_bold"
                 android:text="ARTIFEX"
                 android:textColor="@color/artifex_primary"
-                android:textSize="32sp" />
+                android:textSize="24sp" />
 
             <TextView
                 android:id="@+id/tvAuthTitle"
@@ -247,15 +256,15 @@
                             android:scaleType="centerCrop"
                             app:shapeAppearanceOverlay="@style/ShapeAppearance.Artifex.Circle"
                             app:strokeColor="@color/artifex_primary"
-                            app:strokeWidth="2.5dp" />
+                            app:strokeWidth="2dp" />
 
                         <ImageButton
                             android:id="@+id/btnChangeAvatar"
-                            android:layout_width="34dp"
-                            android:layout_height="34dp"
+                            android:layout_width="32dp"
+                            android:layout_height="32dp"
                             android:layout_gravity="bottom|end"
                             android:background="@drawable/bg_circle_primary"
-                            android:padding="6dp"
+                            android:padding="4dp"
                             android:src="@android:drawable/ic_menu_camera"
                             app:tint="@color/artifex_on_primary" />
                     </FrameLayout>
@@ -284,7 +293,7 @@
                             android:background="?attr/selectableItemBackgroundBorderless"
                             android:clickable="true"
                             android:focusable="true"
-                            android:padding="6dp"
+                            android:padding="4dp"
                             android:src="@drawable/ic_edit"
                             app:tint="@color/artifex_primary" />
                     </LinearLayout>
@@ -357,7 +366,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
                         android:layout_marginTop="12dp"
-                        android:layout_marginBottom="14dp"
+                        android:layout_marginBottom="16dp"
                         android:background="@color/artifex_border" />
 
                     <!-- 4 Icon trạng thái đơn hàng -->
@@ -380,15 +389,15 @@
                             android:orientation="vertical">
 
                             <ImageView
-                                android:layout_width="26dp"
-                                android:layout_height="26dp"
+                                android:layout_width="24dp"
+                                android:layout_height="24dp"
                                 android:src="@drawable/ic_order_pending"
                                 app:tint="@color/artifex_primary" />
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:layout_marginTop="6dp"
+                                android:layout_marginTop="8dp"
                                 android:text="Chờ xác nhận"
                                 android:textColor="@color/artifex_text_secondary"
                                 android:textSize="12sp" />
@@ -407,15 +416,15 @@
                             android:orientation="vertical">
 
                             <ImageView
-                                android:layout_width="26dp"
-                                android:layout_height="26dp"
+                                android:layout_width="24dp"
+                                android:layout_height="24dp"
                                 android:src="@drawable/ic_order_processing"
                                 app:tint="@color/artifex_primary" />
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:layout_marginTop="6dp"
+                                android:layout_marginTop="8dp"
                                 android:text="Chờ lấy hàng"
                                 android:textColor="@color/artifex_text_secondary"
                                 android:textSize="12sp" />
@@ -434,15 +443,15 @@
                             android:orientation="vertical">
 
                             <ImageView
-                                android:layout_width="26dp"
-                                android:layout_height="26dp"
+                                android:layout_width="24dp"
+                                android:layout_height="24dp"
                                 android:src="@drawable/ic_order_shipping"
                                 app:tint="@color/artifex_primary" />
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:layout_marginTop="6dp"
+                                android:layout_marginTop="8dp"
                                 android:text="Đang giao"
                                 android:textColor="@color/artifex_text_secondary"
                                 android:textSize="12sp" />
@@ -461,15 +470,15 @@
                             android:orientation="vertical">
 
                             <ImageView
-                                android:layout_width="26dp"
-                                android:layout_height="26dp"
+                                android:layout_width="24dp"
+                                android:layout_height="24dp"
                                 android:src="@drawable/ic_order_completed"
                                 app:tint="@color/artifex_primary" />
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:layout_marginTop="6dp"
+                                android:layout_marginTop="8dp"
                                 android:text="Đánh giá"
                                 android:textColor="@color/artifex_text_secondary"
                                 android:textSize="12sp" />
@@ -523,7 +532,7 @@
                             android:id="@+id/btnAddNewAddressMain"
                             style="@style/Widget.MaterialComponents.Button.TextButton"
                             android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
+                            android:layout_height="48dp"
                             android:text="+ Thêm địa chỉ"
                             android:textColor="@color/artifex_primary"
                             android:textSize="13sp"
@@ -541,10 +550,10 @@
                         android:clickable="true"
                         android:focusable="true"
                         app:cardBackgroundColor="@color/artifex_surface"
-                        app:cardCornerRadius="14dp"
+                        app:cardCornerRadius="12dp"
                         app:cardElevation="0dp"
                         app:strokeColor="@color/artifex_primary"
-                        app:strokeWidth="1.5dp">
+                        app:strokeWidth="2dp">
 
                         <LinearLayout
                             android:layout_width="match_parent"
@@ -560,8 +569,8 @@
                                 android:orientation="horizontal">
 
                                 <ImageView
-                                    android:layout_width="18dp"
-                                    android:layout_height="18dp"
+                                    android:layout_width="16dp"
+                                    android:layout_height="16dp"
                                     android:src="@drawable/ic_nav_auth"
                                     app:tint="@color/artifex_primary" />
 
@@ -579,34 +588,36 @@
                                     android:id="@+id/tvSelectedTag"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
-                                    android:background="@color/artifex_surface_variant"
+                                    android:background="@drawable/bg_badge_pill"
+                                    android:backgroundTint="@color/artifex_surface_variant"
                                     android:paddingStart="8dp"
-                                    android:paddingTop="3dp"
+                                    android:paddingTop="4dp"
                                     android:paddingEnd="8dp"
-                                    android:paddingBottom="3dp"
+                                    android:paddingBottom="4dp"
                                     android:text="🏠 Nhà riêng"
                                     android:textColor="@color/artifex_text_secondary"
-                                    android:textSize="11sp" />
+                                    android:textSize="12sp" />
 
                                 <TextView
                                     android:id="@+id/tvSelectedDefaultBadge"
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
-                                    android:layout_marginStart="6dp"
-                                    android:background="@color/artifex_primary"
+                                    android:layout_marginStart="8dp"
+                                    android:background="@drawable/bg_badge_pill"
+                                    android:backgroundTint="@color/artifex_primary"
                                     android:paddingStart="8dp"
-                                    android:paddingTop="3dp"
+                                    android:paddingTop="4dp"
                                     android:paddingEnd="8dp"
-                                    android:paddingBottom="3dp"
+                                    android:paddingBottom="4dp"
                                     android:text="MẶC ĐỊNH"
                                     android:textColor="@color/artifex_on_primary"
-                                    android:textSize="10sp"
+                                    android:textSize="12sp"
                                     android:textStyle="bold" />
 
                                 <ImageView
-                                    android:layout_width="18dp"
-                                    android:layout_height="18dp"
-                                    android:layout_marginStart="6dp"
+                                    android:layout_width="16dp"
+                                    android:layout_height="16dp"
+                                    android:layout_marginStart="8dp"
                                     android:src="@drawable/ic_chevron_right"
                                     app:tint="@color/artifex_primary" />
                             </LinearLayout>
@@ -615,8 +626,8 @@
                             <View
                                 android:layout_width="match_parent"
                                 android:layout_height="1dp"
-                                android:layout_marginTop="10dp"
-                                android:layout_marginBottom="10dp"
+                                android:layout_marginTop="12dp"
+                                android:layout_marginBottom="12dp"
                                 android:background="@color/artifex_border" />
 
                             <!-- Hàng 2: Icon Phone + Số điện thoại người nhận -->
@@ -674,15 +685,15 @@
                                 android:orientation="horizontal">
 
                                 <ImageView
-                                    android:layout_width="14dp"
-                                    android:layout_height="14dp"
+                                    android:layout_width="16dp"
+                                    android:layout_height="16dp"
                                     android:src="@drawable/ic_edit"
                                     app:tint="@color/artifex_primary" />
 
                                 <TextView
                                     android:layout_width="wrap_content"
                                     android:layout_height="wrap_content"
-                                    android:layout_marginStart="6dp"
+                                    android:layout_marginStart="8dp"
                                     android:text="Chạm để chọn hoặc đổi sang địa chỉ khác"
                                     android:textColor="@color/artifex_primary"
                                     android:textSize="12sp"
@@ -712,12 +723,14 @@
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btnEmptyAddAddress"
                             android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
+                            android:layout_height="48dp"
                             android:layout_marginTop="8dp"
                             android:text="+ Thêm địa chỉ mới"
                             android:textColor="@color/artifex_on_primary"
+                            android:textSize="15sp"
+                            android:textStyle="bold"
                             app:backgroundTint="@color/artifex_primary"
-                            app:cornerRadius="10dp" />
+                            app:cornerRadius="12dp" />
                     </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
@@ -762,9 +775,9 @@
                         android:gravity="center_vertical"
                         android:orientation="horizontal"
                         android:paddingStart="20dp"
-                        android:paddingTop="14dp"
+                        android:paddingTop="16dp"
                         android:paddingEnd="20dp"
-                        android:paddingBottom="14dp">
+                        android:paddingBottom="16dp">
 
                         <ImageView
                             android:layout_width="20dp"
@@ -775,15 +788,15 @@
                         <TextView
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_marginStart="14dp"
+                            android:layout_marginStart="16dp"
                             android:layout_weight="1"
                             android:text="Đổi mật khẩu"
                             android:textColor="@color/artifex_text_primary"
                             android:textSize="15sp" />
 
                         <ImageView
-                            android:layout_width="18dp"
-                            android:layout_height="18dp"
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
                             android:src="@drawable/ic_chevron_right"
                             app:tint="@color/artifex_text_muted" />
                     </LinearLayout>
@@ -792,7 +805,7 @@
                     <View
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
-                        android:layout_marginStart="54dp"
+                        android:layout_marginStart="56dp"
                         android:layout_marginEnd="20dp"
                         android:background="@color/artifex_border" />
 
@@ -807,9 +820,9 @@
                         android:gravity="center_vertical"
                         android:orientation="horizontal"
                         android:paddingStart="20dp"
-                        android:paddingTop="14dp"
+                        android:paddingTop="16dp"
                         android:paddingEnd="20dp"
-                        android:paddingBottom="14dp">
+                        android:paddingBottom="16dp">
 
                         <ImageView
                             android:layout_width="20dp"
@@ -820,15 +833,15 @@
                         <TextView
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_marginStart="14dp"
+                            android:layout_marginStart="16dp"
                             android:layout_weight="1"
                             android:text="Đăng xuất"
                             android:textColor="@color/artifex_error"
                             android:textSize="15sp" />
 
                         <ImageView
-                            android:layout_width="18dp"
-                            android:layout_height="18dp"
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
                             android:alpha="0.4"
                             android:src="@drawable/ic_chevron_right"
                             app:tint="@color/artifex_error" />
@@ -836,7 +849,7 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- =========== KHÔIỌI GỠI Ý: CÓ TH�� BẠN CŨNG TH ÍCH (SHOPEE SPYLE) ========== -->
+            <!-- =========== KHỐI GỢI Ý: CÓ THỂ BẠN CŨNG THÍCH ========== -->
             <LinearLayout
                 android:id="@+id/layoutRecommendations"
                 android:layout_width="match_parent"
@@ -845,7 +858,7 @@
                 android:layout_marginBottom="16dp"
                 android:orientation="vertical">
 
-                <!-- Header Shopee Style: Đường gạch hai bên & Ngọn lửa 🔥 / CÓ THỂ BẠN CŨNG THÍCH -->
+                <!-- Header Gợi ý: Đường gạch hai bên & Icon nổi bật -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -867,18 +880,19 @@
                         android:paddingEnd="12dp">
 
                         <ImageView
-                            android:layout_width="18dp"
-                            android:layout_height="18dp"
-                            android:src="@drawable/ic_shopee_fire" />
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:contentDescription="@string/title_recommendations"
+                            android:src="@drawable/ic_shopee_fire"
+                            app:tint="@color/artifex_accent" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginStart="6dp"
-                            android:fontFamily="@font/oxanium_bold"
+                            android:layout_marginStart="8dp"
                             android:text="@string/title_recommendations"
-                            android:textColor="@color/artifex_error"
-                            android:textSize="14sp"
+                            android:textColor="@color/artifex_accent"
+                            android:textSize="16sp"
                             android:textStyle="bold" />
                     </LinearLayout>
 

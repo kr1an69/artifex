@@ -167,6 +167,8 @@
                 android:backgroundTint="@color/artifex_primary"
                 android:text="Lưu địa chỉ"
                 android:textColor="@color/artifex_on_primary"
+                android:textSize="15sp"
+                android:textStyle="bold"
                 app:cornerRadius="12dp" />
         </LinearLayout>
     </LinearLayout>

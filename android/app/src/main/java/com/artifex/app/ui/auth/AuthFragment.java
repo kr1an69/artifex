@@ -28,16 +28,13 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.artifex.app.MainActivity;
-import com.artifex.app.data.local.AppDatabase;
-import com.artifex.app.data.local.CartItem;
-import com.artifex.app.ui.catalog.CatalogFragment;
-import com.artifex.app.ui.catalog.ProductAdapter;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
@@ -87,10 +84,10 @@ public class AuthFragment extends Fragment {
     private SharedPrefManager prefManager;
     private FirebaseAuth mAuth;
 
-    // Recommendations (Có thể bạn cũng thích - Shopee Style)
+    // Recommendations (Có thể bạn cũng thích - Độc lập trong ui/auth)
     private RecyclerView rvRecommendations;
     private ProgressBar progressRecommendations;
-    private ProductAdapter catalogProductAdapter;
+    private RecommendedProductAdapter recommendedProductAdapter;
 
     private final ActivityResultLauncher<Intent> imagePickerLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
@@ -170,14 +167,14 @@ public class AuthFragment extends Fragment {
         tvSelectedPhone = v.findViewById(R.id.tvSelectedPhone);
         tvSelectedAddressLine = v.findViewById(R.id.tvSelectedAddressLine);
 
-        // Khởi tạo phần Gợi ý "Có thể bạn cũng thích" (Shopee Style)
+        // Khởi tạo phần Gợi ý "Có thể bạn cũng thích"
         rvRecommendations = v.findViewById(R.id.rvRecommendations);
         progressRecommendations = v.findViewById(R.id.progressRecommendations);
         if (rvRecommendations != null) {
             rvRecommendations.setLayoutManager(new GridLayoutManager(requireContext(), 2));
             rvRecommendations.setNestedScrollingEnabled(false);
-            catalogProductAdapter = new ProductAdapter(new ArrayList<>(), this::showProductDetailBottomSheet);
-            rvRecommendations.setAdapter(catalogProductAdapter);
+            recommendedProductAdapter = new RecommendedProductAdapter(new ArrayList<>(), this::showProductDetailBottomSheet);
+            rvRecommendations.setAdapter(recommendedProductAdapter);
         }
     }
 
@@ -515,8 +512,8 @@ public class AuthFragment extends Fragment {
                 return;
             }
 
-            if (newEmail.isEmpty() || !isValidGmail(newEmail)) {
-                Toast.makeText(requireContext(), "Email phải có định dạng @gmail.com!", Toast.LENGTH_SHORT).show();
+            if (!isValidProfileEmail(newEmail, prefManager.getEmail())) {
+                Toast.makeText(requireContext(), "Email không hợp lệ (hỗ trợ @gmail.com hoặc @artifex.vn)!", Toast.LENGTH_SHORT).show();
                 return;
             }
 
@@ -625,6 +622,16 @@ public class AuthFragment extends Fragment {
         if (email == null) return false;
         String trimmed = email.trim().toLowerCase();
         return trimmed.matches("^[a-zA-Z0-9._%+-]+@gmail\\.com$");
+    }
+
+    private boolean isValidProfileEmail(String email, String existingEmail) {
+        if (email == null || email.trim().isEmpty()) return false;
+        String trimmed = email.trim().toLowerCase(Locale.ROOT);
+        if (existingEmail != null && trimmed.equals(existingEmail.trim().toLowerCase(Locale.ROOT))
+                && Patterns.EMAIL_ADDRESS.matcher(trimmed).matches()) {
+            return true;
+        }
+        return trimmed.matches("^[a-zA-Z0-9._%+-]+@(gmail\\.com|artifex\\.vn)$");
     }
 
     private boolean containsWhitespace(String text) {
@@ -1157,6 +1164,40 @@ public class AuthFragment extends Fragment {
 
     private void uploadAvatarToCloudinary(Uri imageUri) {
         progressBar.setVisibility(View.VISIBLE);
+        Long userId = prefManager.getUserId();
+
+        // 1. Thử gửi file ảnh qua API Backend Spring Boot (sử dụng Cloudinary Java SDK của Backend)
+        okhttp3.MultipartBody.Part filePart = CloudinaryHelper.prepareFilePart(requireContext(), imageUri, "file");
+        if (filePart != null) {
+            apiService.uploadAvatarFile(userId, filePart).enqueue(new Callback<Map<String, Object>>() {
+                @Override
+                public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                    if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
+                        progressBar.setVisibility(View.GONE);
+                        String newAvatarUrl = (String) response.body().get("avatarUrl");
+                        if (newAvatarUrl != null) {
+                            prefManager.updateAvatarUrl(newAvatarUrl);
+                            Glide.with(AuthFragment.this).load(newAvatarUrl).circleCrop().into(ivAvatar);
+                        }
+                        Toast.makeText(requireContext(), "Tải ảnh đại diện qua máy chủ Artifex thành công!", Toast.LENGTH_SHORT).show();
+                    } else {
+                        // Nếu backend chưa cấu hình Cloudinary Secret thật hoặc lỗi -> fallback sang client upload
+                        uploadAvatarDirectlyToCloudinary(imageUri);
+                    }
+                }
+
+                @Override
+                public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                    // Nếu lỗi kết nối máy chủ -> tự động fallback sang client upload
+                    uploadAvatarDirectlyToCloudinary(imageUri);
+                }
+            });
+        } else {
+            uploadAvatarDirectlyToCloudinary(imageUri);
+        }
+    }
+
+    private void uploadAvatarDirectlyToCloudinary(Uri imageUri) {
         CloudinaryHelper.uploadImage(requireContext(), imageUri, new CloudinaryHelper.UploadCallback() {
             @Override
             public void onSuccess(String imageUrl) {
@@ -1461,7 +1502,7 @@ public class AuthFragment extends Fragment {
         prefManager.updatePersonalInfo(fullName, email, phone, dob, gender != null ? gender : "Nam");
     }
 
-    // ==================== RECOMMENDATIONS (CÓ THỂ BẠN CŨNG THÍCH - GỌI TRỰC TIẾP API SÀN THƯƠNG MẠI ĐIỆN TỬ) ====================
+    // ==================== RECOMMENDATIONS (ĐỘC LẬP TRONG PACKAGE UI/AUTH) ====================
 
     private void loadRecommendationProducts() {
         if (!isAdded() || !prefManager.isLoggedIn()) return;
@@ -1470,8 +1511,7 @@ public class AuthFragment extends Fragment {
             progressRecommendations.setVisibility(View.VISIBLE);
         }
 
-        // Gọi trực tiếp API sản phẩm trên sàn thương mại điện tử do bạn phụ trách Backend viết
-        apiService.getProducts(20).enqueue(new Callback<Map<String, Object>>() {
+        apiService.getAuthRecommendedProducts(20).enqueue(new Callback<Map<String, Object>>() {
             @Override
             public void onResponse(@NonNull Call<Map<String, Object>> call, @NonNull Response<Map<String, Object>> response) {
                 if (!isAdded()) return;
@@ -1484,9 +1524,9 @@ public class AuthFragment extends Fragment {
                             Object contentObj = ((Map<?, ?>) dataObj).get("content");
                             if (contentObj instanceof List) {
                                 List<?> rawList = (List<?>) contentObj;
-                                List<CatalogFragment.ProductItem> parsedList = parseCatalogProductsFromBackend(rawList);
-                                if (!parsedList.isEmpty() && catalogProductAdapter != null) {
-                                    catalogProductAdapter.updateData(parsedList);
+                                List<RecommendedProduct> parsedList = parseRecommendedProductsFromBackend(rawList);
+                                if (!parsedList.isEmpty() && recommendedProductAdapter != null) {
+                                    recommendedProductAdapter.updateData(parsedList);
                                 }
                             }
                         }
@@ -1502,36 +1542,40 @@ public class AuthFragment extends Fragment {
         });
     }
 
-    private List<CatalogFragment.ProductItem> parseCatalogProductsFromBackend(List<?> rawList) {
-        List<CatalogFragment.ProductItem> result = new ArrayList<>();
-        String[] badges = new String[]{"-15%", "-10%", "-5%", "HOT", "SALE", "MỚI", "-20%", ""};
+    private List<RecommendedProduct> parseRecommendedProductsFromBackend(List<?> rawList) {
+        List<RecommendedProduct> result = new ArrayList<>();
 
         for (int i = 0; i < rawList.size(); i++) {
             Object item = rawList.get(i);
             if (item instanceof Map) {
                 Map<?, ?> map = (Map<?, ?>) item;
-                String id = map.get("id") != null ? String.valueOf(map.get("id")) : "p" + (i + 1);
-                String categoryId = "cat_" + (map.get("categoryName") != null ? map.get("categoryName").toString().toLowerCase() : "all");
-                String name = (String) map.get("name");
-                String shortSpec = (String) map.get("description");
-                long price = map.get("price") != null ? ((Number) map.get("price")).longValue() : 0L;
-                String discountBadge = badges[i % badges.length];
-                String imageUrl = (String) map.get("imageUrl");
+                long id = map.get("id") instanceof Number ? ((Number) map.get("id")).longValue() : (i + 1L);
+                String categoryName = map.get("categoryName") != null ? map.get("categoryName").toString() : "";
+                String name = map.get("name") != null ? map.get("name").toString() : "";
+                String description = map.get("description") != null ? map.get("description").toString() : "";
+                long price = map.get("price") instanceof Number ? ((Number) map.get("price")).longValue() : 0L;
+                int stock = map.get("stock") instanceof Number ? ((Number) map.get("stock")).intValue() : 0;
+                double ratingAvg = map.get("ratingAvg") instanceof Number ? ((Number) map.get("ratingAvg")).doubleValue() : 5.0;
+                int reviewCount = map.get("reviewCount") instanceof Number ? ((Number) map.get("reviewCount")).intValue() : 0;
+                String imageUrl = map.get("imageUrl") != null ? map.get("imageUrl").toString() : "";
 
-                result.add(new CatalogFragment.ProductItem(
+                result.add(new RecommendedProduct(
                         id,
-                        categoryId,
-                        name != null ? name : "",
-                        shortSpec != null ? shortSpec : "",
+                        categoryName,
+                        name,
+                        description,
                         price,
-                        discountBadge,
-                        imageUrl != null ? imageUrl : ""
+                        stock,
+                        ratingAvg,
+                        reviewCount,
+                        imageUrl
                 ));
             }
         }
         return result;
     }
-    private void showProductDetailBottomSheet(CatalogFragment.ProductItem product) {
+
+    private void showProductDetailBottomSheet(RecommendedProduct product) {
         if (!isAdded() || product == null) return;
 
         BottomSheetDialog dialog = new BottomSheetDialog(requireContext());
@@ -1547,7 +1591,7 @@ public class AuthFragment extends Fragment {
         TextView tvReviewCount = sheetView.findViewById(R.id.tvPreviewReviewCount);
         TextView tvDesc = sheetView.findViewById(R.id.tvPreviewDescription);
         View btnClose = sheetView.findViewById(R.id.btnClosePreview);
-        View btnAddToCart = sheetView.findViewById(R.id.btnAddToCartPreview);
+        View btnViewDetail = sheetView.findViewById(R.id.btnViewDetailPreview);
         View btnExploreStore = sheetView.findViewById(R.id.btnExploreStorePreview);
 
         tvName.setText(product.getName());
@@ -1557,20 +1601,26 @@ public class AuthFragment extends Fragment {
         DecimalFormat formatter = new DecimalFormat("#,### đ", symbols);
         tvPrice.setText(formatter.format(product.getPrice()));
 
-        tvRatingScore.setText("5.0 / 5.0");
-        tvReviewCount.setText("(12 đánh giá từ khách hàng)");
-        tvDesc.setText(product.getShortSpec() != null && !product.getShortSpec().isEmpty()
-                ? product.getShortSpec() + "\n\nSản phẩm chính hãng trong gian hàng Linh kiện Artifex PC. Bảo hành 36 tháng 1 đổi 1."
-                : "Sản phẩm chính hãng phân phối bởi Artifex PC Gear Store. Bảo hành 36 tháng 1 đổi 1.");
+        tvRatingScore.setText(String.format(Locale.US, "%.1f / 5.0", product.getRatingAvg()));
+        tvReviewCount.setText("(" + product.getReviewCount() + " đánh giá)");
+        tvDesc.setText(!product.getDescription().isEmpty()
+                ? product.getDescription()
+                : "Sản phẩm chính hãng phân phối bởi Artifex PC Gear Store.");
 
-        if (product.getCategoryId() != null && !product.getCategoryId().isEmpty()) {
-            tvCategory.setText(product.getCategoryId().replace("cat_", "").toUpperCase());
+        if (!product.getCategoryName().isEmpty()) {
+            tvCategory.setText(product.getCategoryName().toUpperCase(Locale.ROOT));
             tvCategory.setVisibility(View.VISIBLE);
         } else {
             tvCategory.setVisibility(View.GONE);
         }
 
-        tvStock.setText("✓ Còn hàng");
+        if (product.getStock() > 0) {
+            tvStock.setText("✓ Còn hàng: " + product.getStock());
+            tvStock.setTextColor(ContextCompat.getColor(requireContext(), R.color.artifex_success));
+        } else {
+            tvStock.setText("✕ Hết hàng");
+            tvStock.setTextColor(ContextCompat.getColor(requireContext(), R.color.artifex_error));
+        }
 
         Glide.with(this)
                 .load(product.getImageUrl())
@@ -1583,36 +1633,18 @@ public class AuthFragment extends Fragment {
             btnClose.setOnClickListener(v -> dialog.dismiss());
         }
 
-        if (btnAddToCart != null) {
-            btnAddToCart.setOnClickListener(v -> {
-                new Thread(() -> {
-                    try {
-                        int productId = 1;
-                        try {
-                            productId = Integer.parseInt(product.getId().replace("p", ""));
-                        } catch (Exception ignored) {}
-
-                        AppDatabase.getInstance(requireContext()).cartDao().insert(new CartItem(
-                                productId,
-                                product.getName(),
-                                product.getPrice(),
-                                1,
-                                product.getImageUrl()
-                        ));
-                        if (getActivity() != null) {
-                            getActivity().runOnUiThread(() -> {
-                                Toast.makeText(requireContext(), "🛍️ Đã thêm " + product.getName() + " vào giỏ hàng!", Toast.LENGTH_SHORT).show();
-                                dialog.dismiss();
-                            });
-                        }
-                    } catch (Exception e) {
-                        if (getActivity() != null) {
-                            getActivity().runOnUiThread(() -> {
-                                Toast.makeText(requireContext(), "Lỗi thêm giỏ hàng: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                            });
-                        }
+        if (btnViewDetail != null) {
+            btnViewDetail.setOnClickListener(v -> {
+                dialog.dismiss();
+                Bundle resultBundle = new Bundle();
+                resultBundle.putLong("productId", product.getId());
+                getParentFragmentManager().setFragmentResult("selected_product", resultBundle);
+                if (getActivity() instanceof MainActivity) {
+                    BottomNavigationView nav = getActivity().findViewById(R.id.bottom_navigation);
+                    if (nav != null) {
+                        nav.setSelectedItemId(R.id.nav_detail);
                     }
-                }).start();
+                }
             });
         }
 
@@ -1622,7 +1654,7 @@ public class AuthFragment extends Fragment {
                 if (getActivity() instanceof MainActivity) {
                     BottomNavigationView nav = getActivity().findViewById(R.id.bottom_navigation);
                     if (nav != null) {
-                        nav.setSelectedItemId(R.id.nav_catalog); // Chuyển sang Tab Linh kiện của bạn Đạt!
+                        nav.setSelectedItemId(R.id.nav_catalog);
                     }
                 }
             });
