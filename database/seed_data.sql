@@ -27,12 +27,15 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- 1. BẢNG USERS
 CREATE TABLE users (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    firebase_uid VARCHAR(128) COLLATE utf8mb4_bin UNIQUE DEFAULT NULL,
     username VARCHAR(50) NOT NULL UNIQUE,
     email VARCHAR(100) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     full_name VARCHAR(100) NOT NULL,
     phone VARCHAR(20) DEFAULT NULL,
     address VARCHAR(255) DEFAULT NULL,
+    date_of_birth VARCHAR(20) DEFAULT NULL,
+    gender VARCHAR(20) DEFAULT NULL,
     avatar_url VARCHAR(500) DEFAULT 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80',
     role VARCHAR(20) NOT NULL DEFAULT 'USER',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -110,9 +113,9 @@ CREATE TABLE order_details (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- SEED USERS
-INSERT INTO users (id, username, email, password, full_name, phone, address, avatar_url, role) VALUES
-(1, 'nguyenvana', 'vana@artifex.vn', '123456', 'Nguyễn Văn A', '0901234567', 'Khu phố 6, P. Linh Trung, TP. Thủ Đức, TP.HCM', 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80', 'USER'),
-(2, 'admin_artifex', 'admin@artifex.vn', '123456', 'Trần Quản Trị', '0988776655', '398 Nguyễn Tri Phương, P. 4, Q. 10, TP.HCM', 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=300&q=80', 'ADMIN');
+INSERT INTO users (id, firebase_uid, username, email, password, full_name, phone, address, date_of_birth, gender, avatar_url, role) VALUES
+(1, NULL, 'nguyenvana', 'vana@artifex.vn', '123456', 'Nguyễn Văn A', '0901234567', 'Khu phố 6, P. Linh Trung, TP. Thủ Đức, TP.HCM', '15/08/2000', 'Nam', 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80', 'USER'),
+(2, NULL, 'admin_artifex', 'admin@artifex.vn', '123456', 'Trần Quản Trị', '0988776655', '398 Nguyễn Tri Phương, P. 4, Q. 10, TP.HCM', '01/01/1995', 'Nam', 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=300&q=80', 'ADMIN');
 
 -- SEED CATEGORIES
 INSERT INTO categories (id, name, description, image_url) VALUES

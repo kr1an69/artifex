@@ -28,6 +28,29 @@ public class CloudinaryHelper {
         void onError(String error);
     }
 
+    /**
+     * Chuyển đổi Uri ảnh thành MultipartBody.Part để gửi trực tiếp lên Backend Spring Boot.
+     */
+    public static MultipartBody.Part prepareFilePart(Context context, Uri imageUri, String partName) {
+        if (context == null || imageUri == null) return null;
+        try (InputStream inputStream = context.getContentResolver().openInputStream(imageUri);
+             ByteArrayOutputStream byteBuffer = new ByteArrayOutputStream()) {
+
+            if (inputStream == null) return null;
+
+            byte[] buffer = new byte[2048];
+            int len;
+            while ((len = inputStream.read(buffer)) != -1) {
+                byteBuffer.write(buffer, 0, len);
+            }
+            byte[] imageBytes = byteBuffer.toByteArray();
+            RequestBody requestFile = RequestBody.create(MediaType.parse("image/*"), imageBytes);
+            return MultipartBody.Part.createFormData(partName, "avatar.jpg", requestFile);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     public static void uploadImage(Context context, Uri imageUri, UploadCallback callback) {
         Handler mainHandler = new Handler(Looper.getMainLooper());
 
@@ -67,7 +90,16 @@ public class CloudinaryHelper {
                         String secureUrl = jsonObject.getString("secure_url");
                         mainHandler.post(() -> callback.onSuccess(secureUrl));
                     } else {
-                        mainHandler.post(() -> callback.onError("Upload ảnh lên Cloudinary thất bại!"));
+                        String errorDetails = "";
+                        if (response.body() != null) {
+                            try {
+                                errorDetails = response.body().string();
+                            } catch (Exception ignored) {}
+                        }
+                        final String finalErrMsg = !errorDetails.isEmpty()
+                                ? "Upload Cloudinary thất bại (" + response.code() + "): " + errorDetails
+                                : "Upload ảnh lên Cloudinary thất bại (" + response.code() + ")!";
+                        mainHandler.post(() -> callback.onError(finalErrMsg));
                     }
                 }
             } catch (Exception e) {

@@ -1,5 +1,6 @@
 package com.artifex.app.ui.auth;
 
+import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -46,14 +47,19 @@ public class AddressAdapter extends RecyclerView.Adapter<AddressAdapter.AddressV
         holder.tvAddressLine.setText(item.getAddressLine());
         holder.tvTag.setText(item.getTag());
 
+        int defaultStrokePx = Math.round(TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 2f, holder.itemView.getResources().getDisplayMetrics()));
+        int normalStrokePx = Math.round(TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, 1f, holder.itemView.getResources().getDisplayMetrics()));
+
         if (item.isDefault()) {
             holder.tvDefaultBadge.setVisibility(View.VISIBLE);
             holder.card.setStrokeColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.artifex_primary));
-            holder.card.setStrokeWidth(4);
+            holder.card.setStrokeWidth(defaultStrokePx);
         } else {
             holder.tvDefaultBadge.setVisibility(View.GONE);
             holder.card.setStrokeColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.artifex_border));
-            holder.card.setStrokeWidth(2);
+            holder.card.setStrokeWidth(normalStrokePx);
         }
 
         holder.card.setOnClickListener(v -> {

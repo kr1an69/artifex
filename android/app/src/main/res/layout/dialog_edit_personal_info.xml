@@ -4,8 +4,8 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     app:cardBackgroundColor="@color/artifex_surface"
-    app:cardCornerRadius="20dp"
-    app:cardElevation="8dp"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="0dp"
     app:strokeColor="@color/artifex_border"
     app:strokeWidth="1dp">
 
@@ -132,7 +132,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
+                android:layout_marginTop="16dp"
                 android:text="Giới tính"
                 android:textColor="@color/artifex_text_secondary"
                 android:textSize="13sp"
@@ -195,6 +195,8 @@
                     android:layout_marginStart="8dp"
                     android:text="Lưu thay đổi"
                     android:textColor="@color/artifex_on_primary"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
                     app:backgroundTint="@color/artifex_primary"
                     app:cornerRadius="12dp" />
             </LinearLayout>

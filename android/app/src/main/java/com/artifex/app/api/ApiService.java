@@ -54,8 +54,18 @@ public interface ApiService {
     @retrofit2.http.PUT("api/users/{id}/avatar")
     retrofit2.Call<java.util.Map<String, Object>> updateAvatar(@retrofit2.http.Path("id") Long id, @retrofit2.http.Body java.util.Map<String, Object> body);
 
+    @retrofit2.http.Multipart
+    @retrofit2.http.POST("api/users/{id}/avatar/upload")
+    retrofit2.Call<java.util.Map<String, Object>> uploadAvatarFile(
+            @retrofit2.http.Path("id") Long id,
+            @retrofit2.http.Part okhttp3.MultipartBody.Part file
+    );
+
     @retrofit2.http.PUT("api/users/{id}/password")
     retrofit2.Call<java.util.Map<String, Object>> changePassword(@retrofit2.http.Path("id") Long id, @retrofit2.http.Body java.util.Map<String, Object> body);
+
+    @retrofit2.http.GET("api/products")
+    retrofit2.Call<java.util.Map<String, Object>> getAuthRecommendedProducts(@retrofit2.http.Query("size") int size);
 
     // ==================== STORE & ORDER HISTORY APIS (Bạn 5) ====================
     @retrofit2.http.GET("api/orders/user/{userId}")
