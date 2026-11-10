@@ -297,6 +297,19 @@ public class AuthFragment extends Fragment {
                     if (mAuth != null) {
                         mAuth.signOut();
                     }
+                    try {
+                        androidx.credentials.CredentialManager credentialManager = androidx.credentials.CredentialManager.create(requireContext());
+                        androidx.credentials.ClearCredentialStateRequest clearRequest = new androidx.credentials.ClearCredentialStateRequest();
+                        credentialManager.clearCredentialStateAsync(clearRequest, new android.os.CancellationSignal(),
+                                ContextCompat.getMainExecutor(requireContext()),
+                                new androidx.credentials.CredentialManagerCallback<Void, androidx.credentials.exceptions.ClearCredentialException>() {
+                                    @Override
+                                    public void onResult(Void result) {}
+
+                                    @Override
+                                    public void onError(@NonNull androidx.credentials.exceptions.ClearCredentialException e) {}
+                                });
+                    } catch (Exception ignored) {}
                     checkLoginState();
                     Toast.makeText(requireContext(), "Đã đăng xuất!", Toast.LENGTH_SHORT).show();
                 })
@@ -367,6 +380,12 @@ public class AuthFragment extends Fragment {
             @Override
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                 if (!isAdded()) return;
+                if (response.code() == 401) {
+                    prefManager.clear();
+                    checkLoginState();
+                    Toast.makeText(requireContext(), "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!", Toast.LENGTH_LONG).show();
+                    return;
+                }
                 if (response.isSuccessful() && response.body() != null && response.body().get("user") instanceof Map) {
                     @SuppressWarnings("unchecked")
                     String token = (String) response.body().get("token");

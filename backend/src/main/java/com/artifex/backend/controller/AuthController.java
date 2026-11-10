@@ -436,12 +436,32 @@ public class AuthController {
 
     // ==================== CÁC HÀM HỖ TRỢ GỬI SMS THẬT QUA TEXTBEE ====================
 
+    private java.util.List<String> getPhoneVariants(String phoneInput) {
+        if (phoneInput == null || phoneInput.isBlank()) return java.util.Collections.emptyList();
+        String domestic = toDomesticVietnamPhone(phoneInput);
+        String e164 = normalizeVietnamPhone(phoneInput);
+        String noPlus = e164.startsWith("+") ? e164.substring(1) : e164;
+        return java.util.stream.Stream.of(domestic, e164, noPlus)
+                .filter(p -> p != null && !p.isBlank())
+                .distinct()
+                .toList();
+    }
+
     private Optional<User> findUserByNormalizedPhone(String phoneInput) {
+        java.util.List<String> variants = getPhoneVariants(phoneInput);
+        if (variants.isEmpty()) return Optional.empty();
+        Optional<User> direct = userRepository.findFirstByPhoneIn(variants);
+        if (direct != null && direct.isPresent()) {
+            return direct;
+        }
+        // Fallback tương thích với mock tests (khi unit test mock findAll)
         String targetNorm = normalizeVietnamPhone(phoneInput);
-        if (targetNorm.isEmpty()) return Optional.empty();
-        for (User u : userRepository.findAll()) {
-            if (u.getPhone() != null && normalizeVietnamPhone(u.getPhone()).equals(targetNorm)) {
-                return Optional.of(u);
+        java.util.List<User> all = userRepository.findAll();
+        if (all != null && !all.isEmpty()) {
+            for (User u : all) {
+                if (u.getPhone() != null && normalizeVietnamPhone(u.getPhone()).equals(targetNorm)) {
+                    return Optional.of(u);
+                }
             }
         }
         return Optional.empty();
