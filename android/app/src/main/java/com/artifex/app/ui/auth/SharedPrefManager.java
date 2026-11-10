@@ -49,7 +49,7 @@ public class SharedPrefManager {
     public void saveUser(Long id, String username, String email, String fullName, String phone, String address, String avatarUrl) {
         SharedPreferences sp = ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = sp.edit();
-        editor.putLong(KEY_USER_ID, id != null ? id : 1L);
+        editor.putLong(KEY_USER_ID, id != null ? id : -1L);
         editor.putString(KEY_USERNAME, username);
         editor.putString(KEY_EMAIL, email);
         editor.putString(KEY_FULL_NAME, fullName);
@@ -74,7 +74,10 @@ public class SharedPrefManager {
     }
 
     public Long getUserId() {
-        return ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).getLong(KEY_USER_ID, 1L);
+        if (!isLoggedIn()) {
+            return -1L;
+        }
+        return ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).getLong(KEY_USER_ID, -1L);
     }
 
     public String getFullName() {

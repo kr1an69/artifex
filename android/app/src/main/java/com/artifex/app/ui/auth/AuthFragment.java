@@ -25,6 +25,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.PickVisualMediaRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -73,6 +74,7 @@ public class AuthFragment extends Fragment {
     private ImageButton btnChangeAvatar;
     private ImageView btnEditPersonalInfo;
     private TextView tvProfileFullName, tvProfileEmail;
+    private View cardPhoneWarning, btnUpdatePhoneWarning;
 
     // Ô duy nhất hiển thị địa chỉ giao hàng được chọn
     private View cardSelectedAddress, layoutEmptyAddress, btnEmptyAddAddress;
@@ -89,14 +91,11 @@ public class AuthFragment extends Fragment {
     private ProgressBar progressRecommendations;
     private RecommendedProductAdapter recommendedProductAdapter;
 
-    private final ActivityResultLauncher<Intent> imagePickerLauncher = registerForActivityResult(
-            new ActivityResultContracts.StartActivityForResult(),
-            result -> {
-                if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
-                    Uri selectedImageUri = result.getData().getData();
-                    if (selectedImageUri != null) {
-                        uploadAvatarToCloudinary(selectedImageUri);
-                    }
+    private final ActivityResultLauncher<PickVisualMediaRequest> photoPickerLauncher = registerForActivityResult(
+            new ActivityResultContracts.PickVisualMedia(),
+            uri -> {
+                if (uri != null) {
+                    uploadAvatarToCloudinary(uri);
                 }
             }
     );
@@ -154,6 +153,8 @@ public class AuthFragment extends Fragment {
         btnEditPersonalInfo = v.findViewById(R.id.btnEditPersonalInfo);
         tvProfileFullName = v.findViewById(R.id.tvProfileFullName);
         tvProfileEmail = v.findViewById(R.id.tvProfileEmail);
+        cardPhoneWarning = v.findViewById(R.id.cardPhoneWarning);
+        btnUpdatePhoneWarning = v.findViewById(R.id.btnUpdatePhoneWarning);
 
         // Ô duy nhất hiển thị địa chỉ giao hàng
         btnAddNewAddressMain = v.findViewById(R.id.btnAddNewAddressMain);
@@ -222,10 +223,16 @@ public class AuthFragment extends Fragment {
         btnFirebaseAuth.setOnClickListener(v -> handleFirebaseLogin());
 
         btnChangeAvatar.setOnClickListener(v -> {
-            Intent intent = new Intent(Intent.ACTION_PICK);
-            intent.setType("image/*");
-            imagePickerLauncher.launch(intent);
+            photoPickerLauncher.launch(
+                    new PickVisualMediaRequest.Builder()
+                            .setMediaType(ActivityResultContracts.PickVisualMedia.ImageOnly.INSTANCE)
+                            .build()
+            );
         });
+
+        if (btnUpdatePhoneWarning != null) {
+            btnUpdatePhoneWarning.setOnClickListener(v -> showEditPersonalInfoDialog());
+        }
 
         // Bấm nút sửa thông tin cá nhân ở trên đầu
         if (btnEditPersonalInfo != null) {
@@ -410,6 +417,12 @@ public class AuthFragment extends Fragment {
     private void bindProfileData() {
         tvProfileFullName.setText(prefManager.getFullName());
         tvProfileEmail.setText(prefManager.getEmail());
+
+        // Hiển thị cảnh báo nếu tài khoản (ví dụ đăng nhập Google) chưa có số điện thoại
+        String phone = prefManager.getPhone();
+        if (cardPhoneWarning != null) {
+            cardPhoneWarning.setVisibility((phone == null || phone.trim().isEmpty()) ? View.VISIBLE : View.GONE);
+        }
 
         // Cập nhật danh sách địa chỉ giao hàng hiển thị trực tiếp
         refreshAddressList();
@@ -763,12 +776,16 @@ public class AuthFragment extends Fragment {
             etOtp.requestFocus();
         }
 
-        CountDownTimer timer = new CountDownTimer(60000, 1000) {
+        CountDownTimer timer = new CountDownTimer(180000, 1000) {
             @Override
             public void onTick(long millisUntilFinished) {
                 if (tvResendCountdown != null) {
                     tvResendCountdown.setVisibility(View.VISIBLE);
-                    tvResendCountdown.setText("Gửi lại mã sau " + (millisUntilFinished / 1000) + "s");
+                    long totalSec = millisUntilFinished / 1000;
+                    long min = totalSec / 60;
+                    long sec = totalSec % 60;
+                    String timeStr = min > 0 ? String.format(Locale.getDefault(), "%d:%02d", min, sec) : totalSec + "s";
+                    tvResendCountdown.setText("Gửi lại mã sau " + timeStr);
                 }
                 if (btnResendOtp != null) {
                     btnResendOtp.setVisibility(View.GONE);
