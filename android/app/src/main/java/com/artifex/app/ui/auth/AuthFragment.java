@@ -737,12 +737,18 @@ public class AuthFragment extends Fragment {
         apiService.sendRegisterOtp(reqBody).enqueue(new Callback<Map<String, Object>>() {
             @Override
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                if (!isAdded()) return;
                 progressBar.setVisibility(View.GONE);
                 btnSubmitAuth.setEnabled(true);
 
                 if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
                     String msg = (String) response.body().get("message");
                     Toast.makeText(requireContext(), msg != null ? msg : "Đã gửi mã xác thực OTP qua tin nhắn SMS!", Toast.LENGTH_LONG).show();
+                    showRegisterOtpDialog(fullName, email, cleanPhone, password);
+                } else if (response.code() == 429) {
+                    // Backend: Mã OTP đã gửi và vẫn còn hạn -> Tự động mở lại Dialog OTP để người dùng nhập mã, không bị kẹt!
+                    String errorMsg = extractErrorMessage(response, "Mã OTP đã được gửi và vẫn còn hiệu lực trong 3 phút.");
+                    Toast.makeText(requireContext(), errorMsg + " Mở lại giao diện xác thực OTP...", Toast.LENGTH_SHORT).show();
                     showRegisterOtpDialog(fullName, email, cleanPhone, password);
                 } else {
                     String errorMsg = extractErrorMessage(response, "Gửi mã OTP thất bại!");
@@ -752,6 +758,7 @@ public class AuthFragment extends Fragment {
 
             @Override
             public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                if (!isAdded()) return;
                 progressBar.setVisibility(View.GONE);
                 btnSubmitAuth.setEnabled(true);
                 Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
@@ -1039,10 +1046,72 @@ public class AuthFragment extends Fragment {
         // Các View Bước 2 (KHÔNG hiển thị lộ mã OTP trong form)
         TextView tvOtpDeliveryStatus = dialogView.findViewById(R.id.tvOtpDeliveryStatus);
         TextInputEditText etForgotOtpCode = dialogView.findViewById(R.id.etForgotOtpCode);
+        TextView tvForgotResendCountdown = dialogView.findViewById(R.id.tvForgotResendCountdown);
+        TextView btnForgotResendOtp = dialogView.findViewById(R.id.btnForgotResendOtp);
         TextInputEditText etNewPassword = dialogView.findViewById(R.id.etForgotNewPassword);
         TextInputEditText etConfirmPassword = dialogView.findViewById(R.id.etForgotConfirmPassword);
         Button btnBackToStep1 = dialogView.findViewById(R.id.btnBackToStep1);
         Button btnSubmitForgotPass = dialogView.findViewById(R.id.btnSubmitForgotPass);
+
+        final String[] verifiedPhoneHolder = new String[]{""};
+        final CountDownTimer[] forgotTimerHolder = new CountDownTimer[1];
+        Runnable startForgotCountdown = () -> {
+            if (forgotTimerHolder[0] != null) forgotTimerHolder[0].cancel();
+            forgotTimerHolder[0] = new CountDownTimer(180000, 1000) {
+                @Override
+                public void onTick(long millisUntilFinished) {
+                    if (tvForgotResendCountdown != null) {
+                        tvForgotResendCountdown.setVisibility(View.VISIBLE);
+                        long totalSec = millisUntilFinished / 1000;
+                        long min = totalSec / 60;
+                        long sec = totalSec % 60;
+                        String timeStr = min > 0 ? String.format(Locale.getDefault(), "%d:%02d", min, sec) : totalSec + "s";
+                        tvForgotResendCountdown.setText("Gửi lại mã sau " + timeStr);
+                    }
+                    if (btnForgotResendOtp != null) {
+                        btnForgotResendOtp.setVisibility(View.GONE);
+                    }
+                }
+
+                @Override
+                public void onFinish() {
+                    if (tvForgotResendCountdown != null) {
+                        tvForgotResendCountdown.setVisibility(View.GONE);
+                    }
+                    if (btnForgotResendOtp != null) {
+                        btnForgotResendOtp.setVisibility(View.VISIBLE);
+                    }
+                }
+            }.start();
+        };
+
+        if (btnForgotResendOtp != null) {
+            btnForgotResendOtp.setOnClickListener(v -> {
+                btnForgotResendOtp.setEnabled(false);
+                Map<String, Object> reqBody = new HashMap<>();
+                reqBody.put("phone", verifiedPhoneHolder[0]);
+
+                apiService.requestForgotPasswordOtp(reqBody).enqueue(new Callback<Map<String, Object>>() {
+                    @Override
+                    public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                        btnForgotResendOtp.setEnabled(true);
+                        if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
+                            Toast.makeText(requireContext(), "Đã gửi lại mã OTP mới qua SMS!", Toast.LENGTH_SHORT).show();
+                            startForgotCountdown.run();
+                        } else {
+                            String err = extractErrorMessage(response, "Gửi lại mã thất bại!");
+                            Toast.makeText(requireContext(), err, Toast.LENGTH_SHORT).show();
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                        btnForgotResendOtp.setEnabled(true);
+                        Toast.makeText(requireContext(), "Lỗi mạng: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                });
+            });
+        }
 
         // Tự động điền nếu người dùng đã gõ sẵn tài khoản ở màn hình đăng nhập
         String typedPhone = etPhone.getText() != null ? etPhone.getText().toString().trim() : "";
@@ -1050,8 +1119,10 @@ public class AuthFragment extends Fragment {
             etForgotContact.setText(typedPhone);
         }
 
-        final String[] verifiedPhoneHolder = new String[]{""};
 
+        dialog.setOnDismissListener(d -> {
+            if (forgotTimerHolder[0] != null) forgotTimerHolder[0].cancel();
+        });
         btnCancelStep1.setOnClickListener(v -> dialog.dismiss());
 
         // BƯỚC 1: Bấm "Gửi SMS OTP"
@@ -1093,7 +1164,23 @@ public class AuthFragment extends Fragment {
                             tvOtpDeliveryStatus.setText("Đã gửi tin nhắn SMS chứa mã OTP (6 chữ số) tới " + maskedContact + ".");
                         }
 
+                        startForgotCountdown.run();
                         Toast.makeText(requireContext(), "Đã gửi tin nhắn SMS OTP tới " + maskedContact + "! Vui lòng kiểm tra tin nhắn trên điện thoại.", Toast.LENGTH_LONG).show();
+                    } else if (response.code() == 429) {
+                        // Mã OTP đã gửi trước đó vẫn còn hạn -> Vẫn cho phép vào Bước 2 để nhập mã, kèm countdown
+                        String resolvedUser = contactInput;
+                        verifiedPhoneHolder[0] = resolvedUser;
+                        layoutStep1.setVisibility(View.GONE);
+                        layoutStep2.setVisibility(View.VISIBLE);
+                        if (tvSubtitle != null) {
+                            tvSubtitle.setText("Bước 2/2: Nhập mã OTP từ tin nhắn SMS và đặt mật khẩu mới cho \"" + resolvedUser + "\"");
+                        }
+                        if (tvOtpDeliveryStatus != null) {
+                            tvOtpDeliveryStatus.setText("Mã OTP đã được gửi tới " + resolvedUser + " và vẫn còn hiệu lực (3 phút).");
+                        }
+                        startForgotCountdown.run();
+                        String errMsg = extractErrorMessage(response, "Mã OTP đã gửi trước đó vẫn còn hiệu lực.");
+                        Toast.makeText(requireContext(), errMsg, Toast.LENGTH_SHORT).show();
                     } else {
                         String errMsg = "Thông tin xác minh không khớp với tài khoản!";
                         if (response.body() != null && response.body().get("message") != null) {
@@ -1114,6 +1201,7 @@ public class AuthFragment extends Fragment {
 
         // Nút "Quay lại" từ Bước 2 về Bước 1
         btnBackToStep1.setOnClickListener(v -> {
+            if (forgotTimerHolder[0] != null) forgotTimerHolder[0].cancel();
             layoutStep2.setVisibility(View.GONE);
             layoutStep1.setVisibility(View.VISIBLE);
             if (tvSubtitle != null) {
@@ -1162,6 +1250,7 @@ public class AuthFragment extends Fragment {
                     btnSubmitForgotPass.setEnabled(true);
 
                     if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
+                        if (forgotTimerHolder[0] != null) forgotTimerHolder[0].cancel();
                         dialog.dismiss();
                         etPhone.setText(verifiedPhoneHolder[0]);
                         etPassword.setText(newPass);
