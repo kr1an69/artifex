@@ -8,7 +8,7 @@
     android:clickable="true"
     android:focusable="true"
     app:cardBackgroundColor="@color/artifex_surface"
-    app:cardCornerRadius="14dp"
+    app:cardCornerRadius="12dp"
     app:cardElevation="0dp"
     app:strokeColor="@color/artifex_border"
     app:strokeWidth="1dp">
@@ -48,14 +48,15 @@
                 android:id="@+id/tvItemTag"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:background="@color/artifex_surface_variant"
+                android:background="@drawable/bg_badge_pill"
+                android:backgroundTint="@color/artifex_surface_variant"
                 android:paddingStart="8dp"
                 android:paddingTop="4dp"
                 android:paddingEnd="8dp"
                 android:paddingBottom="4dp"
                 android:text="🏠 Nhà riêng"
                 android:textColor="@color/artifex_text_secondary"
-                android:textSize="11sp" />
+                android:textSize="12sp" />
 
             <!-- Badge Mặc định -->
             <TextView
@@ -63,14 +64,15 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
-                android:background="@color/artifex_primary"
+                android:background="@drawable/bg_badge_pill"
+                android:backgroundTint="@color/artifex_primary"
                 android:paddingStart="8dp"
                 android:paddingTop="4dp"
                 android:paddingEnd="8dp"
                 android:paddingBottom="4dp"
                 android:text="MẶC ĐỊNH"
                 android:textColor="@color/artifex_on_primary"
-                android:textSize="10sp"
+                android:textSize="12sp"
                 android:textStyle="bold" />
 
             <!-- Nút Sửa địa chỉ -->
