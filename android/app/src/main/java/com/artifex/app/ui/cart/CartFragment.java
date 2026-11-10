@@ -100,8 +100,12 @@ public class CartFragment extends Fragment {
                 Toast.makeText(requireContext(), "Giỏ hàng đang trống", Toast.LENGTH_SHORT).show();
                 return;
             }
-            // TODO (Bước 6): mở màn hình Checkout
-            Toast.makeText(requireContext(), "Màn hình thanh toán sẽ được thêm ở bước tiếp theo", Toast.LENGTH_SHORT).show();
+            double total = 0;
+            for (CartItem item : currentItems) {
+                total += item.getPrice() * item.getQuantity();
+            }
+            CheckoutBottomSheet.newInstance(total, this::loadCart)
+                    .show(getChildFragmentManager(), "checkout");
         });
     }
 
