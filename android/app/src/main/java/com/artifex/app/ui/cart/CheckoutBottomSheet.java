@@ -1,5 +1,6 @@
 package com.artifex.app.ui.cart;
 
+import android.app.AlertDialog;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -15,6 +16,7 @@ import com.artifex.app.api.RetrofitClient;
 import com.artifex.app.data.local.CartItem;
 import com.artifex.app.data.local.CartRepository;
 import com.artifex.app.ui.auth.SharedPrefManager;
+import com.artifex.app.ui.auth.UserAddress;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textfield.TextInputEditText;
@@ -80,13 +82,48 @@ public class CheckoutBottomSheet extends BottomSheetDialogFragment {
         double total = getArguments() != null ? getArguments().getDouble(ARG_TOTAL) : 0;
         tvTotal.setText(CartAdapter.formatCurrency(total));
 
-        // Điền sẵn thông tin mặc định của khách (chỉ đọc từ SharedPrefManager, không sửa)
+        // Điền sẵn thông tin mặc định của khách từ SharedPrefManager (chỉ đọc).
+        // Nếu chưa đăng nhập (Loose Coupling: userId = 1), tự điền thông tin mẫu của User #1 trong seed_data.sql.
         SharedPrefManager pref = SharedPrefManager.getInstance(requireContext());
-        etName.setText(pref.getFullName());
-        etPhone.setText(pref.getPhone());
-        etAddress.setText(pref.getAddress());
+        String fullName = pref.getFullName();
+        String phone = pref.getPhone();
+        String address = pref.getAddress();
+
+        if (phone.isEmpty() && address.isEmpty()) {
+            fullName = "Nguyễn Văn A";
+            phone = "0901234567";
+            address = "Khu phố 6, P. Linh Trung, TP. Thủ Đức, TP.HCM";
+        }
+        etName.setText(fullName);
+        etPhone.setText(phone);
+        etAddress.setText(address);
+
+        MaterialButton btnPickSavedAddress = view.findViewById(R.id.btnPickSavedAddress);
+        List<UserAddress> savedAddresses = pref.getAddressList();
+        if (!savedAddresses.isEmpty()) {
+            btnPickSavedAddress.setVisibility(View.VISIBLE);
+            btnPickSavedAddress.setOnClickListener(v -> showAddressPickerDialog(savedAddresses));
+        }
 
         btnConfirm.setOnClickListener(v -> submitOrder());
+    }
+
+    private void showAddressPickerDialog(List<UserAddress> addresses) {
+        String[] labels = new String[addresses.size()];
+        for (int i = 0; i < addresses.size(); i++) {
+            UserAddress a = addresses.get(i);
+            labels[i] = a.getTag() + " • " + a.getReceiverName() + " (" + a.getPhone() + ")\n" + a.getAddressLine();
+        }
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Chọn địa chỉ giao hàng")
+                .setItems(labels, (dialog, which) -> {
+                    UserAddress picked = addresses.get(which);
+                    etName.setText(picked.getReceiverName());
+                    etPhone.setText(picked.getPhone());
+                    etAddress.setText(picked.getAddressLine());
+                })
+                .setNegativeButton("Đóng", null)
+                .show();
     }
 
     private boolean validate() {

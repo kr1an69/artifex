@@ -31,7 +31,7 @@ public class CartFragment extends Fragment {
     private RecyclerView rvCartItems;
     private View layoutCartEmpty, cardCartSummary;
     private TextView tvCartSubtitle, tvCartTotal;
-    private MaterialButton btnClearCart, btnCheckout;
+    private MaterialButton btnClearCart, btnCheckout, btnAddSampleCart;
 
     private CartAdapter adapter;
     private CartRepository repository;
@@ -61,6 +61,9 @@ public class CartFragment extends Fragment {
         tvCartTotal = view.findViewById(R.id.tvCartTotal);
         btnClearCart = view.findViewById(R.id.btnClearCart);
         btnCheckout = view.findViewById(R.id.btnCheckout);
+        btnAddSampleCart = view.findViewById(R.id.btnAddSampleCart);
+
+        btnAddSampleCart.setOnClickListener(v -> seedSampleCartItems());
 
         adapter = new CartAdapter(new CartAdapter.OnCartActionListener() {
             @Override
@@ -150,5 +153,43 @@ public class CartFragment extends Fragment {
         }
         tvCartSubtitle.setText(totalQty + " sản phẩm");
         tvCartTotal.setText(CartAdapter.formatCurrency(totalPrice));
+    }
+
+    /**
+     * Nạp 3 linh kiện mẫu khớp ID với database/seed_data.sql để kiểm thử độc lập
+     * Room DB và đặt hàng ngay cả khi chưa nối từ màn hình Catalog/Detail.
+     */
+    private void seedSampleCartItems() {
+        CartItem cpu = new CartItem(
+                1,
+                "Intel Core i5-13600K",
+                7890000,
+                1,
+                "https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?auto=format&fit=crop&w=800&q=80"
+        );
+        CartItem gpu = new CartItem(
+                4,
+                "NVIDIA GeForce RTX 4070 Super 12GB",
+                16990000,
+                1,
+                "https://images.unsplash.com/photo-1587202372775-e229f172b9d7?auto=format&fit=crop&w=800&q=80"
+        );
+        CartItem ram = new CartItem(
+                7,
+                "Corsair Vengeance RGB DDR5 32GB (2x16GB) 6000MHz",
+                3190000,
+                1,
+                "https://images.unsplash.com/photo-1562976540-1502c2145186?auto=format&fit=crop&w=800&q=80"
+        );
+
+        repository.addToCart(cpu, ok1 ->
+                repository.addToCart(gpu, ok2 ->
+                        repository.addToCart(ram, ok3 -> {
+                            if (!isAdded()) return;
+                            Toast.makeText(requireContext(), "Đã nạp 3 linh kiện mẫu vào giỏ hàng", Toast.LENGTH_SHORT).show();
+                            loadCart();
+                        })
+                )
+        );
     }
 }

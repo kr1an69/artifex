@@ -97,9 +97,22 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:gravity="center"
-                android:text="Hãy chọn linh kiện ở mục Sản phẩm và thêm vào giỏ nhé."
+                android:text="Hãy chọn linh kiện ở mục Sản phẩm hoặc nạp dữ liệu mẫu để kiểm thử giỏ hàng."
                 android:textColor="@color/artifex_text_secondary"
                 android:textSize="14sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnAddSampleCart"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:minHeight="48dp"
+                android:paddingHorizontal="20dp"
+                android:text="+ Nạp linh kiện mẫu"
+                android:textColor="@color/artifex_primary"
+                app:cornerRadius="12dp"
+                app:strokeColor="@color/artifex_primary" />
         </LinearLayout>
     </FrameLayout>
 
