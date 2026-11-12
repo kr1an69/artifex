@@ -299,9 +299,14 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
         Optional<User> userOpt = findUserByNormalizedPhone(contactInput);
-        if (userOpt.isEmpty() || PasswordUtils.isFirebaseOnlyAccount(userOpt.get().getPassword())) {
+        if (userOpt.isEmpty()) {
             response.put("status", "ERROR");
-            response.put("message", "Không tìm thấy tài khoản dùng mật khẩu với số điện thoại này!");
+            response.put("message", "Không tìm thấy tài khoản với số điện thoại này!");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+        if (PasswordUtils.isFirebaseOnlyAccount(userOpt.get().getPassword())) {
+            response.put("status", "ERROR");
+            response.put("message", "Tài khoản này đăng nhập bằng Google nên không thể đổi mật khẩu tại đây. Vui lòng tự đổi mật khẩu trên tài khoản Google bên ngoài!");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
         User user = userOpt.get();
@@ -379,7 +384,7 @@ public class AuthController {
         User user = userOpt.get();
         if (PasswordUtils.isFirebaseOnlyAccount(user.getPassword())) {
             response.put("status", "ERROR");
-            response.put("message", "Tài khoản liên kết Google không sử dụng mật khẩu này!");
+            response.put("message", "Tài khoản này đăng nhập bằng Google nên không thể đổi mật khẩu tại đây. Vui lòng tự đổi mật khẩu trên tài khoản Google bên ngoài!");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
         String key = "reset:" + normalizeVietnamPhone(user.getPhone());

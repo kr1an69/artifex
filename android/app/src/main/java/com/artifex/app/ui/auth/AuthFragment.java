@@ -998,6 +998,7 @@ public class AuthFragment extends Fragment {
                     String token = (String) response.body().get("token");
                     if (token != null) prefManager.saveAuthToken(token);
                     saveUserDataToPref(userMap);
+                    prefManager.setGoogleAccount(true);
                     checkLoginState();
                     Toast.makeText(requireContext(), "Đăng nhập Google thành công!", Toast.LENGTH_SHORT).show();
                 } else {
@@ -1534,6 +1535,15 @@ public class AuthFragment extends Fragment {
     }
 
     private void showChangePasswordDialog() {
+        if (prefManager.isGoogleAccount()) {
+            new AlertDialog.Builder(requireContext())
+                    .setTitle("Tài khoản liên kết Google")
+                    .setMessage("Tài khoản của bạn đang đăng nhập bằng Google nên không thể đổi mật khẩu trực tiếp trong ứng dụng Artifex.\n\nVui lòng tự thay đổi mật khẩu trực tiếp ở tài khoản Google bên ngoài!")
+                    .setPositiveButton("Đã hiểu", (d, which) -> d.dismiss())
+                    .show();
+            return;
+        }
+
         AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
         View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_change_password, null);
         builder.setView(dialogView);
@@ -1594,7 +1604,8 @@ public class AuthFragment extends Fragment {
                         dialog.dismiss();
                         Toast.makeText(requireContext(), "Đổi mật khẩu thành công!", Toast.LENGTH_SHORT).show();
                     } else if (response.code() == 400) {
-                        Toast.makeText(requireContext(), "Mật khẩu hiện tại không đúng hoặc tài khoản không hỗ trợ!", Toast.LENGTH_SHORT).show();
+                        String errMsg = extractErrorMessage(response, "Mật khẩu hiện tại không đúng hoặc tài khoản không hỗ trợ!");
+                        Toast.makeText(requireContext(), errMsg, Toast.LENGTH_LONG).show();
                     } else {
                         Toast.makeText(requireContext(), "Đổi mật khẩu thất bại (Mã lỗi: " + response.code() + ")!", Toast.LENGTH_SHORT).show();
                     }
@@ -1614,6 +1625,7 @@ public class AuthFragment extends Fragment {
 
     private void saveUserDataToPref(Map<String, Object> user) {
         Long id = user.get("id") != null ? ((Number) user.get("id")).longValue() : 1L;
+        String firebaseUid = (String) user.get("firebaseUid");
         String username = (String) user.get("username");
         String email = (String) user.get("email");
         String fullName = (String) user.get("fullName");
@@ -1623,7 +1635,11 @@ public class AuthFragment extends Fragment {
         String dob = (String) user.get("dateOfBirth");
         String gender = (String) user.get("gender");
 
+        boolean isGoogleAccount = (firebaseUid != null && !firebaseUid.trim().isEmpty())
+                || (username != null && username.startsWith("fb_"));
+
         prefManager.saveUser(id, username, email, fullName, phone, address, avatarUrl);
+        prefManager.setGoogleAccount(isGoogleAccount);
         prefManager.updatePersonalInfo(fullName, email, phone, dob, gender != null ? gender : "Nam");
     }
 

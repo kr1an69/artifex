@@ -23,6 +23,7 @@ public class SharedPrefManager {
     private static final String KEY_ADDRESS = "key_address";
     private static final String KEY_AVATAR_URL = "key_avatar_url";
     private static final String KEY_IS_LOGGED_IN = "key_is_logged_in";
+    private static final String KEY_IS_GOOGLE_ACCOUNT = "key_is_google_account";
     private static final String KEY_AUTH_TOKEN = "key_auth_token";
     private static final String KEY_ADDRESS_LIST_PREFIX = "key_address_list_";
 
@@ -272,6 +273,17 @@ public class SharedPrefManager {
         return "";
     }
 
+    public void setGoogleAccount(boolean isGoogleAccount) {
+        ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).edit()
+                .putBoolean(KEY_IS_GOOGLE_ACCOUNT, isGoogleAccount)
+                .apply();
+    }
+
+    public boolean isGoogleAccount() {
+        return ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE)
+                .getBoolean(KEY_IS_GOOGLE_ACCOUNT, false);
+    }
+
     public void clear() {
         SharedPreferences.Editor editor = ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).edit();
         editor.remove(KEY_USER_ID);
@@ -284,6 +296,7 @@ public class SharedPrefManager {
         editor.remove(KEY_GENDER);
         editor.remove(KEY_ADDRESS);
         editor.remove(KEY_AVATAR_URL);
+        editor.remove(KEY_IS_GOOGLE_ACCOUNT);
         editor.putBoolean(KEY_IS_LOGGED_IN, false);
         editor.apply();
     }

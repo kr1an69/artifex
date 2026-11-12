@@ -229,7 +229,7 @@ public class UserController {
         // Kiểm tra chặn nếu là tài khoản đăng nhập qua Google
         if (PasswordUtils.isFirebaseOnlyAccount(user.getPassword())) {
             response.put("status", "ERROR");
-            response.put("message", "Tài khoản liên kết Google không sử dụng mật khẩu này!");
+            response.put("message", "Tài khoản của bạn đăng nhập bằng Google nên không thể đổi mật khẩu tại đây. Vui lòng tự đổi mật khẩu trên tài khoản Google bên ngoài!");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
