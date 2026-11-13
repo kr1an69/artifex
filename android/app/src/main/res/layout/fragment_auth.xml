@@ -201,9 +201,18 @@
                 android:layout_width="match_parent"
                 android:layout_height="52dp"
                 android:layout_marginTop="12dp"
+                android:fontFamily="@font/be_vietnam_pro_medium"
                 android:text="Đăng nhập nhanh với Google"
+                android:textAllCaps="false"
                 android:textColor="@color/artifex_text_primary"
+                android:textSize="15sp"
+                app:backgroundTint="@color/artifex_surface"
                 app:cornerRadius="12dp"
+                app:icon="@drawable/ic_google"
+                app:iconGravity="textStart"
+                app:iconPadding="12dp"
+                app:iconSize="20dp"
+                app:iconTint="@null"
                 app:strokeColor="@color/artifex_border"
                 app:strokeWidth="1dp" />
 
