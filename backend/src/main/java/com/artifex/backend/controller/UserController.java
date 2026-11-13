@@ -91,9 +91,16 @@ public class UserController {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
             }
             String domesticPhone = toDomesticVietnamPhone(rawPhone);
-            String targetNorm = normalizeVietnamPhone(rawPhone);
-            boolean phoneTaken = userRepository.findAll().stream()
-                    .anyMatch(u -> !u.getId().equals(id) && u.getPhone() != null && normalizeVietnamPhone(u.getPhone()).equals(targetNorm));
+            java.util.List<String> variants = getPhoneVariants(rawPhone);
+            boolean phoneTaken = userRepository.existsByPhoneInAndIdNot(variants, id);
+            if (!phoneTaken) {
+                String targetNorm = normalizeVietnamPhone(rawPhone);
+                java.util.List<User> all = userRepository.findAll();
+                if (all != null && !all.isEmpty()) {
+                    phoneTaken = all.stream()
+                            .anyMatch(u -> !u.getId().equals(id) && u.getPhone() != null && normalizeVietnamPhone(u.getPhone()).equals(targetNorm));
+                }
+            }
             if (phoneTaken) {
                 response.put("status", "ERROR");
                 response.put("message", "Số điện thoại này đã được sử dụng bởi tài khoản khác!");
@@ -194,7 +201,7 @@ public class UserController {
             response.put("status", "ERROR");
             response.put("message", e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
-        } catch (IOException e) {
+        } catch (Exception e) {
             response.put("status", "ERROR");
             response.put("message", "Lỗi upload ảnh lên Cloudinary: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
@@ -222,7 +229,7 @@ public class UserController {
         // Kiểm tra chặn nếu là tài khoản đăng nhập qua Google
         if (PasswordUtils.isFirebaseOnlyAccount(user.getPassword())) {
             response.put("status", "ERROR");
-            response.put("message", "Tài khoản liên kết Google không sử dụng mật khẩu này!");
+            response.put("message", "Tài khoản của bạn đăng nhập bằng Google nên không thể đổi mật khẩu tại đây. Vui lòng tự đổi mật khẩu trên tài khoản Google bên ngoài!");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
@@ -293,6 +300,17 @@ public class UserController {
             return "0" + e164.substring(3);
         }
         return rawPhone.replaceAll("[^0-9]", "");
+    }
+
+    private java.util.List<String> getPhoneVariants(String phoneInput) {
+        if (phoneInput == null || phoneInput.isBlank()) return java.util.Collections.emptyList();
+        String domestic = toDomesticVietnamPhone(phoneInput);
+        String e164 = normalizeVietnamPhone(phoneInput);
+        String noPlus = e164.startsWith("+") ? e164.substring(1) : e164;
+        return java.util.stream.Stream.of(domestic, e164, noPlus)
+                .filter(p -> p != null && !p.isBlank())
+                .distinct()
+                .toList();
     }
 
     /**

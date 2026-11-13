@@ -31,7 +31,7 @@
             android:layout_marginTop="4dp"
             android:text="Nhập thông tin người nhận và địa chỉ giao hàng"
             android:textColor="@color/artifex_text_secondary"
-            android:textSize="13sp" />
+            android:textSize="12sp" />
 
         <!-- Họ và tên người nhận -->
         <com.google.android.material.textfield.TextInputLayout
@@ -106,7 +106,7 @@
             android:layout_marginTop="16dp"
             android:text="Loại địa chỉ:"
             android:textColor="@color/artifex_text_secondary"
-            android:textSize="13sp" />
+            android:textSize="12sp" />
 
         <RadioGroup
             android:id="@+id/rgAddressTag"
@@ -141,13 +141,13 @@
             android:checked="false"
             android:text="Đặt làm địa chỉ giao hàng mặc định"
             android:textColor="@color/artifex_text_primary"
-            android:textSize="13sp" />
+            android:textSize="14sp" />
 
         <!-- Nút Hủy & Lưu -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
+            android:layout_marginTop="16dp"
             android:gravity="end"
             android:orientation="horizontal">
 

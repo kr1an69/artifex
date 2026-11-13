@@ -10,7 +10,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="20dp">
+        android:padding="16dp">
 
         <!-- ================= KHỐI 1: FORM ĐĂNG NHẬP / ĐĂNG KÝ ================= -->
         <LinearLayout
@@ -180,7 +180,7 @@
                 android:padding="4dp"
                 android:text="Quên mật khẩu?"
                 android:textColor="@color/artifex_primary"
-                android:textSize="13sp"
+                android:textSize="14sp"
                 android:textStyle="bold" />
 
             <com.google.android.material.button.MaterialButton
@@ -308,6 +308,69 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
+            <!-- Card Cảnh báo thiếu SĐT (dành cho tài khoản Google / chưa cập nhật SĐT) -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardPhoneWarning"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:visibility="gone"
+                app:cardBackgroundColor="@color/artifex_surface"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp"
+                app:strokeColor="@color/artifex_accent"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="16dp">
+
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:contentDescription="Cảnh báo"
+                        android:src="@android:drawable/stat_notify_error"
+                        app:tint="@color/artifex_accent" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Chưa cập nhật số điện thoại"
+                            android:textColor="@color/artifex_accent"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="Vui lòng cập nhật số điện thoại để thuận tiện nhận hàng và nhận OTP."
+                            android:textColor="@color/artifex_text_secondary"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnUpdatePhoneWarning"
+                        style="@style/Widget.MaterialComponents.Button.TextButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="48dp"
+                        android:text="Cập nhật"
+                        android:textColor="@color/artifex_primary"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
             <!-- Card: Đơn mua của tôi -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/cardMyOrders"
@@ -351,7 +414,7 @@
                             android:layout_height="wrap_content"
                             android:text="Xem lịch sử"
                             android:textColor="@color/artifex_text_secondary"
-                            android:textSize="13sp" />
+                            android:textSize="12sp" />
 
                         <ImageView
                             android:layout_width="16dp"
@@ -503,7 +566,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:padding="20dp">
+                    android:padding="16dp">
 
                     <!-- Hàng tiêu đề kèm nút + Thêm địa chỉ -->
                     <LinearLayout
@@ -535,7 +598,7 @@
                             android:layout_height="48dp"
                             android:text="+ Thêm địa chỉ"
                             android:textColor="@color/artifex_primary"
-                            android:textSize="13sp"
+                            android:textSize="14sp"
                             android:textStyle="bold"
                             app:icon="@drawable/ic_location"
                             app:iconTint="@color/artifex_primary" />
@@ -649,7 +712,7 @@
                                     android:layout_height="wrap_content"
                                     android:layout_marginStart="8dp"
                                     android:textColor="@color/artifex_text_secondary"
-                                    android:textSize="13sp" />
+                                    android:textSize="12sp" />
                             </LinearLayout>
 
                             <!-- Hàng 3: Icon Location + Địa chỉ chi tiết -->
@@ -755,12 +818,12 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:paddingStart="20dp"
+                        android:paddingStart="16dp"
                         android:paddingTop="16dp"
-                        android:paddingEnd="20dp"
+                        android:paddingEnd="16dp"
                         android:text="Tài khoản &amp; Bảo mật"
                         android:textColor="@color/artifex_text_secondary"
-                        android:textSize="13sp"
+                        android:textSize="12sp"
                         android:textStyle="bold" />
 
                     <!-- Hàng 1: Đổi Mật Khẩu (Clickable) -->
@@ -774,9 +837,9 @@
                         android:focusable="true"
                         android:gravity="center_vertical"
                         android:orientation="horizontal"
-                        android:paddingStart="20dp"
+                        android:paddingStart="16dp"
                         android:paddingTop="16dp"
-                        android:paddingEnd="20dp"
+                        android:paddingEnd="16dp"
                         android:paddingBottom="16dp">
 
                         <ImageView
@@ -806,7 +869,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="1dp"
                         android:layout_marginStart="56dp"
-                        android:layout_marginEnd="20dp"
+                        android:layout_marginEnd="16dp"
                         android:background="@color/artifex_border" />
 
                     <!-- Hàng 2: Đăng Xuất (Clickable) -->
@@ -819,9 +882,9 @@
                         android:focusable="true"
                         android:gravity="center_vertical"
                         android:orientation="horizontal"
-                        android:paddingStart="20dp"
+                        android:paddingStart="16dp"
                         android:paddingTop="16dp"
-                        android:paddingEnd="20dp"
+                        android:paddingEnd="16dp"
                         android:paddingBottom="16dp">
 
                         <ImageView
@@ -938,7 +1001,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
-            android:layout_marginTop="20dp"
+            android:layout_marginTop="16dp"
             android:visibility="gone" />
 
     </LinearLayout>

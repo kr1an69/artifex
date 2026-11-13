@@ -57,6 +57,7 @@ public class FirebaseLoginService {
         // Do not mutate a managed entity's password to serialize a public response.
         Map<String, Object> profile = new LinkedHashMap<>();
         profile.put("id", user.getId());
+        profile.put("firebaseUid", user.getFirebaseUid());
         profile.put("username", user.getUsername());
         profile.put("email", user.getEmail());
         profile.put("fullName", user.getFullName());

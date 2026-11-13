@@ -10,6 +10,7 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.fragment.app.Fragment;
 
 import com.artifex.app.ui.auth.AuthFragment;
+import com.artifex.app.ui.auth.SharedPrefManager;
 import com.artifex.app.ui.cart.CartFragment;
 import com.artifex.app.ui.catalog.CatalogFragment;
 import com.artifex.app.ui.detail.DetailFragment;
@@ -25,6 +26,9 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
+
+        // Khởi tạo sớm SharedPrefManager để các Interceptor & Fragment luôn có token xác thực
+        SharedPrefManager.getInstance(getApplicationContext());
 
         bottomNavigationView = findViewById(R.id.bottom_navigation);
 
