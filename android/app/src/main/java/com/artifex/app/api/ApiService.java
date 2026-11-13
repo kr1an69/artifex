@@ -42,6 +42,9 @@ public interface ApiService {
     @retrofit2.http.POST("api/auth/forgot-password/send-otp")
     retrofit2.Call<java.util.Map<String, Object>> requestForgotPasswordOtp(@retrofit2.http.Body java.util.Map<String, Object> body);
 
+    @retrofit2.http.POST("api/auth/forgot-password/verify-otp")
+    retrofit2.Call<java.util.Map<String, Object>> verifyForgotPasswordOtp(@retrofit2.http.Body java.util.Map<String, Object> body);
+
     @retrofit2.http.POST("api/auth/forgot-password")
     retrofit2.Call<java.util.Map<String, Object>> forgotPassword(@retrofit2.http.Body java.util.Map<String, Object> body);
 

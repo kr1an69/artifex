@@ -47,13 +47,24 @@ public class AuthController {
         final String otpCode;
         final long expiresAt;
         int failedAttempts;
+        boolean verified;
+        long verifiedUntil;
 
         OtpRecord(String otpCode, long expiresAt) {
             this.otpCode = otpCode;
             this.expiresAt = expiresAt;
             this.failedAttempts = 0;
+            this.verified = false;
+            this.verifiedUntil = 0L;
         }
     }
+
+    private record ResetOtpValidation(
+            User user,
+            String storageKey,
+            OtpRecord record,
+            ResponseEntity<Map<String, Object>> errorResponse
+    ) {}
 
     /**
      * Bước 1 Đăng ký: Kiểm tra Số điện thoại, gửi mã xác thực SMS OTP thật.
@@ -349,7 +360,31 @@ public class AuthController {
     }
 
     /**
-     * Bước 2: Kiểm tra mã OTP 6 chữ số, cập nhật mật khẩu mới và trả về thông tin User để đăng nhập ngay.
+     * Bước 2: Xác thực mã OTP 6 chữ số trước khi chuyển sang bước đặt mật khẩu mới.
+     */
+    @PostMapping("/forgot-password/verify-otp")
+    public ResponseEntity<Map<String, Object>> verifyForgotPasswordOtp(@RequestBody ForgotPasswordVerifyOtpRequest request) {
+        String phoneInput = request.getPhone() != null ? request.getPhone().trim() : "";
+        String otpInput = request.getOtp() != null ? request.getOtp().trim() : "";
+
+        ResetOtpValidation validation = validateResetOtp(phoneInput, otpInput);
+        if (validation.errorResponse() != null) {
+            return validation.errorResponse();
+        }
+
+        OtpRecord record = validation.record();
+        record.failedAttempts = 0;
+        record.verified = true;
+        record.verifiedUntil = Math.max(record.expiresAt, System.currentTimeMillis() + OTP_EXPIRATION_MS);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("status", "SUCCESS");
+        response.put("message", "Xác thực mã OTP thành công! Vui lòng đặt mật khẩu mới.");
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Bước 3: Kiểm tra mã OTP 6 chữ số, cập nhật mật khẩu mới và trả về thông tin User để đăng nhập ngay.
      */
     @PostMapping("/forgot-password")
     public ResponseEntity<Map<String, Object>> resetPasswordWithOtp(@RequestBody ForgotPasswordRequest request) {
@@ -372,54 +407,15 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
-        Optional<User> userOpt = findUserByNormalizedPhone(phoneInput);
-
-
-        if (userOpt.isEmpty()) {
-            response.put("status", "ERROR");
-            response.put("message", "Không tìm thấy tài khoản!");
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+        ResetOtpValidation validation = validateResetOtp(phoneInput, otpInput);
+        if (validation.errorResponse() != null) {
+            return validation.errorResponse();
         }
 
-        User user = userOpt.get();
-        if (PasswordUtils.isFirebaseOnlyAccount(user.getPassword())) {
-            response.put("status", "ERROR");
-            response.put("message", "Tài khoản này đăng nhập bằng Google nên không thể đổi mật khẩu tại đây. Vui lòng tự đổi mật khẩu trên tài khoản Google bên ngoài!");
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
-        }
-        String key = "reset:" + normalizeVietnamPhone(user.getPhone());
-        OtpRecord record = otpStorage.get(key);
-
-        if (record == null) {
-            response.put("status", "ERROR");
-            response.put("message", "Chưa có yêu cầu mã OTP hoặc mã đã được sử dụng!");
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
-        }
-
-        if (System.currentTimeMillis() > record.expiresAt) {
-            otpStorage.remove(key);
-            response.put("status", "ERROR");
-            response.put("message", "Mã OTP đã hết hạn (quá 3 phút), vui lòng lấy lại mã mới!");
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
-        }
-
-        if (!record.otpCode.equals(otpInput)) {
-            record.failedAttempts++;
-            if (record.failedAttempts >= MAX_OTP_ATTEMPTS) {
-                otpStorage.remove(key);
-                response.put("status", "ERROR");
-                response.put("message", "Bạn đã nhập sai mã OTP quá 5 lần. Mã đã bị hủy vì lý do bảo mật, vui lòng lấy lại mã mới!");
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
-            }
-            int remaining = MAX_OTP_ATTEMPTS - record.failedAttempts;
-            response.put("status", "ERROR");
-            response.put("message", "Mã xác thực OTP không chính xác! Bạn còn " + remaining + " lần thử.");
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
-        }
-
+        User user = validation.user();
         user.setPassword(PasswordUtils.hash(newPassword));
         User savedUser = userRepository.save(user);
-        otpStorage.remove(key);
+        otpStorage.remove(validation.storageKey());
 
         String token = tokenService.generateToken(savedUser.getId(), savedUser.getRole());
 
@@ -428,6 +424,60 @@ public class AuthController {
         response.put("token", token);
         response.put("user", savedUser);
         return ResponseEntity.ok(response);
+    }
+
+    private ResetOtpValidation validateResetOtp(String phoneInput, String otpInput) {
+        if (!isPhoneNumber(phoneInput) || otpInput.isEmpty()) {
+            return new ResetOtpValidation(null, null, null,
+                    errorResponse(HttpStatus.BAD_REQUEST, "Vui lòng nhập đầy đủ số điện thoại và mã OTP!"));
+        }
+
+        Optional<User> userOpt = findUserByNormalizedPhone(phoneInput);
+        if (userOpt.isEmpty()) {
+            return new ResetOtpValidation(null, null, null,
+                    errorResponse(HttpStatus.NOT_FOUND, "Không tìm thấy tài khoản!"));
+        }
+
+        User user = userOpt.get();
+        if (PasswordUtils.isFirebaseOnlyAccount(user.getPassword())) {
+            return new ResetOtpValidation(null, null, null,
+                    errorResponse(HttpStatus.BAD_REQUEST, "Tài khoản này đăng nhập bằng Google nên không thể đổi mật khẩu tại đây. Vui lòng tự đổi mật khẩu trên tài khoản Google bên ngoài!"));
+        }
+
+        String key = "reset:" + normalizeVietnamPhone(user.getPhone());
+        OtpRecord record = otpStorage.get(key);
+        if (record == null) {
+            return new ResetOtpValidation(null, null, null,
+                    errorResponse(HttpStatus.BAD_REQUEST, "Chưa có yêu cầu mã OTP hoặc mã đã được sử dụng!"));
+        }
+
+        long effectiveExpiry = record.verified ? record.verifiedUntil : record.expiresAt;
+        if (System.currentTimeMillis() > effectiveExpiry) {
+            otpStorage.remove(key);
+            return new ResetOtpValidation(null, null, null,
+                    errorResponse(HttpStatus.BAD_REQUEST, "Mã OTP đã hết hạn (quá 3 phút), vui lòng lấy lại mã mới!"));
+        }
+
+        if (!record.otpCode.equals(otpInput)) {
+            record.failedAttempts++;
+            if (record.failedAttempts >= MAX_OTP_ATTEMPTS) {
+                otpStorage.remove(key);
+                return new ResetOtpValidation(null, null, null,
+                        errorResponse(HttpStatus.BAD_REQUEST, "Bạn đã nhập sai mã OTP quá 5 lần. Mã đã bị hủy vì lý do bảo mật, vui lòng lấy lại mã mới!"));
+            }
+            int remaining = MAX_OTP_ATTEMPTS - record.failedAttempts;
+            return new ResetOtpValidation(null, null, null,
+                    errorResponse(HttpStatus.BAD_REQUEST, "Mã xác thực OTP không chính xác! Bạn còn " + remaining + " lần thử."));
+        }
+
+        return new ResetOtpValidation(user, key, record, null);
+    }
+
+    private ResponseEntity<Map<String, Object>> errorResponse(HttpStatus status, String message) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("status", "ERROR");
+        response.put("message", message);
+        return ResponseEntity.status(status).body(response);
     }
 
     @PostMapping("/logout")

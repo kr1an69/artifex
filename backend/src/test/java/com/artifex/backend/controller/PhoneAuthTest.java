@@ -109,6 +109,28 @@ class PhoneAuthTest {
     }
 
     @Test
+    void verifyResetOtpChecksCodeWithoutConsumingUntilPasswordReset() throws Exception {
+        User user = existingUser();
+        when(repository.findAll()).thenReturn(List.of(user));
+        when(repository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        seedOtp("reset:+84912345678", "123456");
+
+        var badVerify = controller.verifyForgotPasswordOtp(new ForgotPasswordVerifyOtpRequest("0912345678", "000000"));
+        assertEquals(HttpStatus.BAD_REQUEST, badVerify.getStatusCode());
+        assertTrue(badVerify.getBody().get("message").toString().contains("còn 4 lần"));
+
+        var okVerify = controller.verifyForgotPasswordOtp(new ForgotPasswordVerifyOtpRequest("0912345678", "123456"));
+        assertEquals(HttpStatus.OK, okVerify.getStatusCode());
+        assertEquals("SUCCESS", okVerify.getBody().get("status"));
+
+        var resetResp = controller.resetPasswordWithOtp(new ForgotPasswordRequest("0912345678", "123456", "newpass123"));
+        assertEquals(HttpStatus.OK, resetResp.getStatusCode());
+        assertEquals(HttpStatus.BAD_REQUEST,
+                controller.verifyForgotPasswordOtp(new ForgotPasswordVerifyOtpRequest("0912345678", "123456")).getStatusCode());
+        verify(repository, times(1)).save(user);
+    }
+
+    @Test
     void otpIsInvalidatedAfter5FailedAttempts() throws Exception {
         User user = existingUser();
         when(repository.findAll()).thenReturn(List.of(user));

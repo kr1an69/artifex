@@ -91,6 +91,11 @@ public class AuthFragment extends Fragment {
     private ProgressBar progressRecommendations;
     private RecommendedProductAdapter recommendedProductAdapter;
 
+    private CountDownTimer registerOtpTimer;
+    private CountDownTimer forgotOtpTimer;
+    private AlertDialog registerOtpDialog;
+    private AlertDialog forgotPasswordDialog;
+
     private final ActivityResultLauncher<PickVisualMediaRequest> photoPickerLauncher = registerForActivityResult(
             new ActivityResultContracts.PickVisualMedia(),
             uri -> {
@@ -189,22 +194,27 @@ public class AuthFragment extends Fragment {
 
                 @Override
                 public void onTextChanged(CharSequence s, int start, int before, int count) {
-                    if (!isRegisterMode || tilEmail == null) return;
-                    String input = s != null ? s.toString().trim().toLowerCase() : "";
-                    if (input.isEmpty()) {
-                        tilEmail.setError(null);
-                        tilEmail.setErrorEnabled(false);
-                    } else if (!isValidGmail(input)) {
-                        tilEmail.setErrorEnabled(true);
-                        tilEmail.setError("Email phải có định dạng @gmail.com");
-                    } else {
-                        tilEmail.setError(null);
-                        tilEmail.setErrorEnabled(false);
-                    }
+                    if (!isRegisterMode) return;
+                    // Chỉ kiểm tra sau khi gõ xong (rời ô hoặc bấm xong); xóa lỗi ngay khi đang sửa.
+                    clearEmailError();
                 }
 
                 @Override
                 public void afterTextChanged(android.text.Editable s) {}
+            });
+
+            etEmail.setOnFocusChangeListener((v, hasFocus) -> {
+                if (!hasFocus) {
+                    validateRegisterEmailOnComplete();
+                }
+            });
+
+            etEmail.setOnEditorActionListener((v, actionId, event) -> {
+                if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_NEXT
+                        || actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+                    validateRegisterEmailOnComplete();
+                }
+                return false;
             });
         }
 
@@ -281,6 +291,7 @@ public class AuthFragment extends Fragment {
                 .setMessage("Bạn có chắc chắn muốn đăng xuất khỏi tài khoản hiện tại không?")
                 .setNegativeButton("Hủy", (dialog, which) -> dialog.dismiss())
                 .setPositiveButton("Đăng xuất", (dialog, which) -> {
+                    if (!isAdded()) return;
                     String token = prefManager.getAuthToken();
                     if (token != null && !token.trim().isEmpty()) {
                         String authHeader = "Bearer " + token.trim();
@@ -293,23 +304,9 @@ public class AuthFragment extends Fragment {
                         });
                     }
                     prefManager.clear();
-                    mAuth = FirebaseAuthHelper.getFirebaseAuth(requireContext());
-                    if (mAuth != null) {
-                        mAuth.signOut();
-                    }
-                    try {
-                        androidx.credentials.CredentialManager credentialManager = androidx.credentials.CredentialManager.create(requireContext());
-                        androidx.credentials.ClearCredentialStateRequest clearRequest = new androidx.credentials.ClearCredentialStateRequest();
-                        credentialManager.clearCredentialStateAsync(clearRequest, new android.os.CancellationSignal(),
-                                ContextCompat.getMainExecutor(requireContext()),
-                                new androidx.credentials.CredentialManagerCallback<Void, androidx.credentials.exceptions.ClearCredentialException>() {
-                                    @Override
-                                    public void onResult(Void result) {}
-
-                                    @Override
-                                    public void onError(@NonNull androidx.credentials.exceptions.ClearCredentialException e) {}
-                                });
-                    } catch (Exception ignored) {}
+                    signOutFirebaseClient(true);
+                    clearAuthFormInputs();
+                    resetAvatarPlaceholder();
                     checkLoginState();
                     Toast.makeText(requireContext(), "Đã đăng xuất!", Toast.LENGTH_SHORT).show();
                 })
@@ -322,8 +319,7 @@ public class AuthFragment extends Fragment {
             tilFullName.setVisibility(View.VISIBLE);
             if (tilEmail != null) {
                 tilEmail.setVisibility(View.VISIBLE);
-                tilEmail.setError(null);
-                tilEmail.setErrorEnabled(false);
+                clearEmailError();
             }
             if (tilPhone != null) {
                 tilPhone.setVisibility(View.VISIBLE);
@@ -341,8 +337,7 @@ public class AuthFragment extends Fragment {
             tilFullName.setVisibility(View.GONE);
             if (tilEmail != null) {
                 tilEmail.setVisibility(View.GONE);
-                tilEmail.setError(null);
-                tilEmail.setErrorEnabled(false);
+                clearEmailError();
             }
             if (tilPhone != null) {
                 tilPhone.setVisibility(View.VISIBLE);
@@ -382,16 +377,14 @@ public class AuthFragment extends Fragment {
                 if (!isAdded()) return;
                 if (response.code() == 401) {
                     prefManager.clear();
+                    signOutFirebaseClient(false);
+                    clearAuthFormInputs();
+                    resetAvatarPlaceholder();
                     checkLoginState();
                     Toast.makeText(requireContext(), "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!", Toast.LENGTH_LONG).show();
                     return;
                 }
-                if (response.isSuccessful() && response.body() != null && response.body().get("user") instanceof Map) {
-                    @SuppressWarnings("unchecked")
-                    String token = (String) response.body().get("token");
-                    if (token != null) prefManager.saveAuthToken(token);
-                    Map<String, Object> userMap = (Map<String, Object>) response.body().get("user");
-                    saveUserDataToPref(userMap);
+                if (response.isSuccessful() && applyAuthSessionFromResponse(response.body(), false)) {
                     bindProfileData();
                 }
             }
@@ -446,12 +439,18 @@ public class AuthFragment extends Fragment {
         // Cập nhật danh sách địa chỉ giao hàng hiển thị trực tiếp
         refreshAddressList();
 
-        String avatarUrl = prefManager.getAvatarUrl();
-        if (avatarUrl != null && !avatarUrl.isEmpty()) {
-            Glide.with(this)
-                    .load(avatarUrl)
-                    .circleCrop()
-                    .into(ivAvatar);
+        if (ivAvatar != null) {
+            String avatarUrl = prefManager.getAvatarUrl();
+            if (avatarUrl != null && !avatarUrl.trim().isEmpty()) {
+                Glide.with(this)
+                        .load(avatarUrl.trim())
+                        .placeholder(R.drawable.ic_avatar_placeholder)
+                        .error(R.drawable.ic_avatar_placeholder)
+                        .circleCrop()
+                        .into(ivAvatar);
+            } else {
+                resetAvatarPlaceholder();
+            }
         }
     }
 
@@ -612,6 +611,7 @@ public class AuthFragment extends Fragment {
         }
 
         progressBar.setVisibility(View.VISIBLE);
+        btnSubmitAuth.setEnabled(false);
         Map<String, Object> body = new HashMap<>();
         body.put("phone", normalizeLoginPhone(phone));
         body.put("password", password);
@@ -619,25 +619,28 @@ public class AuthFragment extends Fragment {
         apiService.login(body).enqueue(new Callback<Map<String, Object>>() {
             @Override
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                if (!isAdded() || getView() == null) return;
                 progressBar.setVisibility(View.GONE);
+                btnSubmitAuth.setEnabled(true);
                 if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
-                    @SuppressWarnings("unchecked")
-                    String token = (String) response.body().get("token");
-                    if (token != null) prefManager.saveAuthToken(token);
-                    Map<String, Object> userMap = (Map<String, Object>) response.body().get("user");
-                    saveUserDataToPref(userMap);
-
-
+                    if (!applyAuthSessionFromResponse(response.body(), false)) {
+                        Toast.makeText(requireContext(), "Phản hồi tài khoản không hợp lệ!", Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    clearAuthFormInputs();
                     checkLoginState();
                     Toast.makeText(requireContext(), "Đăng nhập thành công!", Toast.LENGTH_SHORT).show();
                 } else {
-                    Toast.makeText(requireContext(), "Sai thông tin đăng nhập!", Toast.LENGTH_SHORT).show();
+                    String errMsg = extractErrorMessage(response, "Sai thông tin đăng nhập!");
+                    Toast.makeText(requireContext(), errMsg, Toast.LENGTH_LONG).show();
                 }
             }
 
             @Override
             public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                if (!isAdded() || getView() == null) return;
                 progressBar.setVisibility(View.GONE);
+                btnSubmitAuth.setEnabled(true);
                 Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
@@ -654,6 +657,23 @@ public class AuthFragment extends Fragment {
         if (email == null) return false;
         String trimmed = email.trim().toLowerCase();
         return trimmed.matches("^[a-zA-Z0-9._%+-]+@gmail\\.com$");
+    }
+
+    private void clearEmailError() {
+        if (tilEmail == null) return;
+        tilEmail.setError(null);
+        tilEmail.setErrorEnabled(false);
+    }
+
+    private void validateRegisterEmailOnComplete() {
+        if (!isAdded() || !isRegisterMode || tilEmail == null || etEmail == null) return;
+        String input = etEmail.getText() != null ? etEmail.getText().toString().trim().toLowerCase(Locale.ROOT) : "";
+        if (input.isEmpty() || isValidGmail(input)) {
+            clearEmailError();
+        } else {
+            tilEmail.setErrorEnabled(true);
+            tilEmail.setError("Email phải có định dạng @gmail.com");
+        }
     }
 
     private boolean isValidProfileEmail(String email, String existingEmail) {
@@ -687,22 +707,24 @@ public class AuthFragment extends Fragment {
         if (fullName.isEmpty() || email.isEmpty() || phone.isEmpty() || password.isEmpty() || confirmPassword.isEmpty()) {
             Toast.makeText(requireContext(), "Vui lòng nhập đầy đủ tất cả thông tin!", Toast.LENGTH_SHORT).show();
             if (email.isEmpty() && tilEmail != null) {
+                tilEmail.setErrorEnabled(true);
                 tilEmail.setError("Vui lòng nhập địa chỉ Gmail!");
+            } else {
+                validateRegisterEmailOnComplete();
             }
             return;
         }
 
         if (!isValidGmail(email)) {
             if (tilEmail != null) {
+                tilEmail.setErrorEnabled(true);
                 tilEmail.setError("Email phải có định dạng @gmail.com (ví dụ: name@gmail.com)");
             }
             Toast.makeText(requireContext(), "Email phải có định dạng @gmail.com!", Toast.LENGTH_SHORT).show();
             etEmail.requestFocus();
             return;
         } else {
-            if (tilEmail != null) {
-                tilEmail.setError(null);
-            }
+            clearEmailError();
         }
 
         String cleanPhone = normalizeLoginPhone(phone);
@@ -744,12 +766,12 @@ public class AuthFragment extends Fragment {
                 if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
                     String msg = (String) response.body().get("message");
                     Toast.makeText(requireContext(), msg != null ? msg : "Đã gửi mã xác thực OTP qua tin nhắn SMS!", Toast.LENGTH_LONG).show();
-                    showRegisterOtpDialog(fullName, email, cleanPhone, password);
+                    showRegisterOtpDialog(fullName, email, cleanPhone, password, 180000L);
                 } else if (response.code() == 429) {
                     // Backend: Mã OTP đã gửi và vẫn còn hạn -> Tự động mở lại Dialog OTP để người dùng nhập mã, không bị kẹt!
                     String errorMsg = extractErrorMessage(response, "Mã OTP đã được gửi và vẫn còn hiệu lực trong 3 phút.");
                     Toast.makeText(requireContext(), errorMsg + " Mở lại giao diện xác thực OTP...", Toast.LENGTH_SHORT).show();
-                    showRegisterOtpDialog(fullName, email, cleanPhone, password);
+                    showRegisterOtpDialog(fullName, email, cleanPhone, password, extractOtpCooldownMillis(errorMsg));
                 } else {
                     String errorMsg = extractErrorMessage(response, "Gửi mã OTP thất bại!");
                     Toast.makeText(requireContext(), errorMsg, Toast.LENGTH_LONG).show();
@@ -770,7 +792,13 @@ public class AuthFragment extends Fragment {
             String fullName,
             String email,
             String phone,
-            String password) {
+            String password,
+            long initialCountdownMillis) {
+
+        cancelRegisterOtpTimer();
+        if (registerOtpDialog != null && registerOtpDialog.isShowing()) {
+            registerOtpDialog.dismiss();
+        }
 
         AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
         View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_register_otp, null);
@@ -778,9 +806,16 @@ public class AuthFragment extends Fragment {
         builder.setCancelable(false);
 
         AlertDialog dialog = builder.create();
+        registerOtpDialog = dialog;
         if (dialog.getWindow() != null) {
             dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
         }
+        dialog.setOnDismissListener(d -> {
+            cancelRegisterOtpTimer();
+            if (registerOtpDialog == dialog) {
+                registerOtpDialog = null;
+            }
+        });
 
         TextView tvTargetPhone = dialogView.findViewById(R.id.tvRegisterTargetPhone);
         EditText etOtp = dialogView.findViewById(R.id.etRegisterOtp);
@@ -802,32 +837,15 @@ public class AuthFragment extends Fragment {
             etOtp.requestFocus();
         }
 
-        CountDownTimer timer = new CountDownTimer(180000, 1000) {
-            @Override
-            public void onTick(long millisUntilFinished) {
-                if (tvResendCountdown != null) {
-                    tvResendCountdown.setVisibility(View.VISIBLE);
-                    long totalSec = millisUntilFinished / 1000;
-                    long min = totalSec / 60;
-                    long sec = totalSec % 60;
-                    String timeStr = min > 0 ? String.format(Locale.getDefault(), "%d:%02d", min, sec) : totalSec + "s";
-                    tvResendCountdown.setText("Gửi lại mã sau " + timeStr);
-                }
-                if (btnResendOtp != null) {
-                    btnResendOtp.setVisibility(View.GONE);
-                }
-            }
-
-            @Override
-            public void onFinish() {
-                if (tvResendCountdown != null) {
-                    tvResendCountdown.setVisibility(View.GONE);
-                }
-                if (btnResendOtp != null) {
-                    btnResendOtp.setVisibility(View.VISIBLE);
-                }
-            }
-        }.start();
+        java.util.function.LongConsumer startRegisterCountdown = durationMs -> {
+            cancelRegisterOtpTimer();
+            registerOtpTimer = startOtpCountdown(
+                    durationMs,
+                    tvResendCountdown,
+                    btnResendOtp,
+                    () -> isAdded() && dialog.isShowing());
+        };
+        startRegisterCountdown.accept(initialCountdownMillis);
 
         if (btnResendOtp != null) {
             btnResendOtp.setOnClickListener(v -> {
@@ -839,10 +857,11 @@ public class AuthFragment extends Fragment {
                 apiService.sendRegisterOtp(reqBody).enqueue(new Callback<Map<String, Object>>() {
                     @Override
                     public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                        if (!isAdded() || !dialog.isShowing()) return;
                         btnResendOtp.setEnabled(true);
                         if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
                             Toast.makeText(requireContext(), "Đã gửi lại mã OTP mới qua SMS!", Toast.LENGTH_SHORT).show();
-                            timer.start();
+                            startRegisterCountdown.accept(180000L);
                         } else {
                             String err = extractErrorMessage(response, "Gửi lại mã thất bại!");
                             Toast.makeText(requireContext(), err, Toast.LENGTH_SHORT).show();
@@ -851,6 +870,7 @@ public class AuthFragment extends Fragment {
 
                     @Override
                     public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                        if (!isAdded() || !dialog.isShowing()) return;
                         btnResendOtp.setEnabled(true);
                         Toast.makeText(requireContext(), "Lỗi mạng: " + t.getMessage(), Toast.LENGTH_SHORT).show();
                     }
@@ -878,20 +898,18 @@ public class AuthFragment extends Fragment {
             apiService.register(regBody).enqueue(new Callback<Map<String, Object>>() {
                 @Override
                 public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                    if (!isAdded() || !dialog.isShowing()) return;
                     btnConfirm.setEnabled(true);
                     btnConfirm.setText("Xác nhận & Tạo tài khoản");
 
                     if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
-                        timer.cancel();
+                        if (!applyAuthSessionFromResponse(response.body(), false)) {
+                            Toast.makeText(requireContext(), "Phản hồi tài khoản không hợp lệ!", Toast.LENGTH_LONG).show();
+                            return;
+                        }
+                        cancelRegisterOtpTimer();
                         dialog.dismiss();
-
-                        @SuppressWarnings("unchecked")
-                        String token = (String) response.body().get("token");
-                        if (token != null) prefManager.saveAuthToken(token);
-                        Map<String, Object> userMap = (Map<String, Object>) response.body().get("user");
-                        saveUserDataToPref(userMap);
-
-
+                        clearAuthFormInputs();
                         checkLoginState();
                         Toast.makeText(requireContext(), "Đăng ký tài khoản và xác thực số điện thoại thành công!", Toast.LENGTH_LONG).show();
                     } else {
@@ -902,6 +920,7 @@ public class AuthFragment extends Fragment {
 
                 @Override
                 public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                    if (!isAdded() || !dialog.isShowing()) return;
                     btnConfirm.setEnabled(true);
                     btnConfirm.setText("Xác nhận & Tạo tài khoản");
                     Toast.makeText(requireContext(), "Lỗi kết nối: " + t.getMessage(), Toast.LENGTH_SHORT).show();
@@ -910,7 +929,7 @@ public class AuthFragment extends Fragment {
         });
 
         btnCancel.setOnClickListener(v -> {
-            timer.cancel();
+            cancelRegisterOtpTimer();
             dialog.dismiss();
         });
 
@@ -962,6 +981,7 @@ public class AuthFragment extends Fragment {
                     @Override
                     public void onError(String message) {
                         if (!isCurrentFirebaseAttempt(attempt)) return;
+                        signOutFirebaseClient(false);
                         finishFirebaseLogin();
                         Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
                     }
@@ -987,21 +1007,17 @@ public class AuthFragment extends Fragment {
                 if (!isCurrentFirebaseAttempt(attempt)) return;
                 finishFirebaseLogin();
                 if (response.isSuccessful() && response.body() != null
-                        && "SUCCESS".equals(response.body().get("status"))
-                        && response.body().get("user") instanceof Map) {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> userMap = (Map<String, Object>) response.body().get("user");
-                    if (!(userMap.get("id") instanceof Number)) {
+                        && "SUCCESS".equals(response.body().get("status"))) {
+                    if (!applyAuthSessionFromResponse(response.body(), true)) {
+                        signOutFirebaseClient(true);
                         Toast.makeText(requireContext(), "Phản hồi tài khoản không hợp lệ!", Toast.LENGTH_LONG).show();
                         return;
                     }
-                    String token = (String) response.body().get("token");
-                    if (token != null) prefManager.saveAuthToken(token);
-                    saveUserDataToPref(userMap);
-                    prefManager.setGoogleAccount(true);
+                    clearAuthFormInputs();
                     checkLoginState();
                     Toast.makeText(requireContext(), "Đăng nhập Google thành công!", Toast.LENGTH_SHORT).show();
                 } else {
+                    signOutFirebaseClient(true);
                     Toast.makeText(requireContext(), extractErrorMessage(response,
                             "Không thể xác thực tài khoản Google với máy chủ!"), Toast.LENGTH_LONG).show();
                 }
@@ -1010,6 +1026,7 @@ public class AuthFragment extends Fragment {
             @Override
             public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                 if (!isCurrentFirebaseAttempt(attempt) || call.isCanceled()) return;
+                signOutFirebaseClient(false);
                 finishFirebaseLogin();
                 Toast.makeText(requireContext(), "Không thể kết nối máy chủ. Vui lòng thử lại.", Toast.LENGTH_LONG).show();
             }
@@ -1021,16 +1038,32 @@ public class AuthFragment extends Fragment {
         firebaseAttempt++;
         if (googleSignInCancellation != null) googleSignInCancellation.cancel();
         if (firebaseLoginCall != null) firebaseLoginCall.cancel();
+        cancelRegisterOtpTimer();
+        cancelForgotOtpTimer();
+        if (registerOtpDialog != null && registerOtpDialog.isShowing()) {
+            registerOtpDialog.dismiss();
+        }
+        registerOtpDialog = null;
+        if (forgotPasswordDialog != null && forgotPasswordDialog.isShowing()) {
+            forgotPasswordDialog.dismiss();
+        }
+        forgotPasswordDialog = null;
         super.onDestroyView();
     }
 
     // ================= QUÊN MẬT KHẨU TÀI KHOẢN THƯỜNG (GỬI TIN NHẮN SMS OTP 6 SỐ QUA TEXTBEE) =================
     private void showForgotPasswordDialog() {
+        cancelForgotOtpTimer();
+        if (forgotPasswordDialog != null && forgotPasswordDialog.isShowing()) {
+            forgotPasswordDialog.dismiss();
+        }
+
         AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
         View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_forgot_password, null);
         builder.setView(dialogView);
 
         AlertDialog dialog = builder.create();
+        forgotPasswordDialog = dialog;
         if (dialog.getWindow() != null) {
             dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
         }
@@ -1038,52 +1071,50 @@ public class AuthFragment extends Fragment {
         TextView tvSubtitle = dialogView.findViewById(R.id.tvForgotSubtitle);
         LinearLayout layoutStep1 = dialogView.findViewById(R.id.layoutForgotStep1);
         LinearLayout layoutStep2 = dialogView.findViewById(R.id.layoutForgotStep2);
+        LinearLayout layoutStep3 = dialogView.findViewById(R.id.layoutForgotStep3);
 
         // Các View Bước 1
         TextInputEditText etForgotContact = dialogView.findViewById(R.id.etForgotContact);
         Button btnCancelStep1 = dialogView.findViewById(R.id.btnCancelForgotStep1);
         Button btnRequestOtp = dialogView.findViewById(R.id.btnRequestOtp);
 
-        // Các View Bước 2 (KHÔNG hiển thị lộ mã OTP trong form)
+        // Các View Bước 2 (Chỉ nhập & xác thực mã OTP)
         TextView tvOtpDeliveryStatus = dialogView.findViewById(R.id.tvOtpDeliveryStatus);
         TextInputEditText etForgotOtpCode = dialogView.findViewById(R.id.etForgotOtpCode);
         TextView tvForgotResendCountdown = dialogView.findViewById(R.id.tvForgotResendCountdown);
         TextView btnForgotResendOtp = dialogView.findViewById(R.id.btnForgotResendOtp);
+        Button btnBackToStep1 = dialogView.findViewById(R.id.btnBackToStep1);
+        Button btnVerifyForgotOtp = dialogView.findViewById(R.id.btnVerifyForgotOtp);
+
+        // Các View Bước 3 (Màn hình nhập mật khẩu mới & nhập lại mật khẩu)
         TextInputEditText etNewPassword = dialogView.findViewById(R.id.etForgotNewPassword);
         TextInputEditText etConfirmPassword = dialogView.findViewById(R.id.etForgotConfirmPassword);
-        Button btnBackToStep1 = dialogView.findViewById(R.id.btnBackToStep1);
+        Button btnBackToStep2 = dialogView.findViewById(R.id.btnBackToStep2);
         Button btnSubmitForgotPass = dialogView.findViewById(R.id.btnSubmitForgotPass);
 
         final String[] verifiedPhoneHolder = new String[]{""};
-        final CountDownTimer[] forgotTimerHolder = new CountDownTimer[1];
-        Runnable startForgotCountdown = () -> {
-            if (forgotTimerHolder[0] != null) forgotTimerHolder[0].cancel();
-            forgotTimerHolder[0] = new CountDownTimer(180000, 1000) {
-                @Override
-                public void onTick(long millisUntilFinished) {
-                    if (tvForgotResendCountdown != null) {
-                        tvForgotResendCountdown.setVisibility(View.VISIBLE);
-                        long totalSec = millisUntilFinished / 1000;
-                        long min = totalSec / 60;
-                        long sec = totalSec % 60;
-                        String timeStr = min > 0 ? String.format(Locale.getDefault(), "%d:%02d", min, sec) : totalSec + "s";
-                        tvForgotResendCountdown.setText("Gửi lại mã sau " + timeStr);
-                    }
-                    if (btnForgotResendOtp != null) {
-                        btnForgotResendOtp.setVisibility(View.GONE);
-                    }
-                }
+        final String[] verifiedOtpHolder = new String[]{""};
 
-                @Override
-                public void onFinish() {
-                    if (tvForgotResendCountdown != null) {
-                        tvForgotResendCountdown.setVisibility(View.GONE);
-                    }
-                    if (btnForgotResendOtp != null) {
-                        btnForgotResendOtp.setVisibility(View.VISIBLE);
-                    }
-                }
-            }.start();
+        java.util.function.IntConsumer showStep = step -> {
+            layoutStep1.setVisibility(step == 1 ? View.VISIBLE : View.GONE);
+            layoutStep2.setVisibility(step == 2 ? View.VISIBLE : View.GONE);
+            layoutStep3.setVisibility(step == 3 ? View.VISIBLE : View.GONE);
+            if (tvSubtitle == null) return;
+            if (step == 1) {
+                tvSubtitle.setText("Bước 1/3: Xác minh tài khoản để nhận mã OTP 6 chữ số");
+            } else if (step == 2) {
+                tvSubtitle.setText("Bước 2/3: Nhập mã OTP từ tin nhắn SMS cho \"" + verifiedPhoneHolder[0] + "\"");
+            } else {
+                tvSubtitle.setText("Bước 3/3: Nhập mật khẩu mới cho tài khoản \"" + verifiedPhoneHolder[0] + "\"");
+            }
+        };
+        java.util.function.LongConsumer startForgotCountdown = durationMs -> {
+            cancelForgotOtpTimer();
+            forgotOtpTimer = startOtpCountdown(
+                    durationMs,
+                    tvForgotResendCountdown,
+                    btnForgotResendOtp,
+                    () -> isAdded() && dialog.isShowing());
         };
 
         if (btnForgotResendOtp != null) {
@@ -1095,10 +1126,13 @@ public class AuthFragment extends Fragment {
                 apiService.requestForgotPasswordOtp(reqBody).enqueue(new Callback<Map<String, Object>>() {
                     @Override
                     public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                        if (!isAdded() || !dialog.isShowing()) return;
                         btnForgotResendOtp.setEnabled(true);
                         if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
+                            verifiedOtpHolder[0] = "";
+                            if (etForgotOtpCode != null) etForgotOtpCode.setText("");
                             Toast.makeText(requireContext(), "Đã gửi lại mã OTP mới qua SMS!", Toast.LENGTH_SHORT).show();
-                            startForgotCountdown.run();
+                            startForgotCountdown.accept(180000L);
                         } else {
                             String err = extractErrorMessage(response, "Gửi lại mã thất bại!");
                             Toast.makeText(requireContext(), err, Toast.LENGTH_SHORT).show();
@@ -1107,6 +1141,7 @@ public class AuthFragment extends Fragment {
 
                     @Override
                     public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                        if (!isAdded() || !dialog.isShowing()) return;
                         btnForgotResendOtp.setEnabled(true);
                         Toast.makeText(requireContext(), "Lỗi mạng: " + t.getMessage(), Toast.LENGTH_SHORT).show();
                     }
@@ -1122,7 +1157,10 @@ public class AuthFragment extends Fragment {
 
 
         dialog.setOnDismissListener(d -> {
-            if (forgotTimerHolder[0] != null) forgotTimerHolder[0].cancel();
+            cancelForgotOtpTimer();
+            if (forgotPasswordDialog == dialog) {
+                forgotPasswordDialog = null;
+            }
         });
         btnCancelStep1.setOnClickListener(v -> dialog.dismiss());
 
@@ -1144,6 +1182,7 @@ public class AuthFragment extends Fragment {
             apiService.requestForgotPasswordOtp(body).enqueue(new Callback<Map<String, Object>>() {
                 @Override
                 public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                    if (!isAdded() || !dialog.isShowing()) return;
                     progressBar.setVisibility(View.GONE);
                     btnRequestOtp.setEnabled(true);
 
@@ -1154,45 +1193,45 @@ public class AuthFragment extends Fragment {
                                 : contactInput;
 
                         verifiedPhoneHolder[0] = resolvedUser;
+                        verifiedOtpHolder[0] = "";
+                        if (etForgotOtpCode != null) etForgotOtpCode.setText("");
+                        if (etNewPassword != null) etNewPassword.setText("");
+                        if (etConfirmPassword != null) etConfirmPassword.setText("");
 
-                        // Chuyển sang giao diện Bước 2 (Chỉ gửi tin nhắn SMS về điện thoại thật, KHÔNG hiển thị trên máy ảo)
-                        layoutStep1.setVisibility(View.GONE);
-                        layoutStep2.setVisibility(View.VISIBLE);
-                        if (tvSubtitle != null) {
-                            tvSubtitle.setText("Bước 2/2: Nhập mã OTP từ tin nhắn SMS và đặt mật khẩu mới cho \"" + resolvedUser + "\"");
-                        }
+                        // Chuyển sang giao diện Bước 2 (chỉ nhập mã OTP)
+                        showStep.accept(2);
                         if (tvOtpDeliveryStatus != null) {
                             tvOtpDeliveryStatus.setText("Đã gửi tin nhắn SMS chứa mã OTP (6 chữ số) tới " + maskedContact + ".");
                         }
+                        if (etForgotOtpCode != null) etForgotOtpCode.requestFocus();
 
-                        startForgotCountdown.run();
+                        startForgotCountdown.accept(180000L);
                         Toast.makeText(requireContext(), "Đã gửi tin nhắn SMS OTP tới " + maskedContact + "! Vui lòng kiểm tra tin nhắn trên điện thoại.", Toast.LENGTH_LONG).show();
                     } else if (response.code() == 429) {
-                        // Mã OTP đã gửi trước đó vẫn còn hạn -> Vẫn cho phép vào Bước 2 để nhập mã, kèm countdown
-                        String resolvedUser = contactInput;
-                        verifiedPhoneHolder[0] = resolvedUser;
-                        layoutStep1.setVisibility(View.GONE);
-                        layoutStep2.setVisibility(View.VISIBLE);
-                        if (tvSubtitle != null) {
-                            tvSubtitle.setText("Bước 2/2: Nhập mã OTP từ tin nhắn SMS và đặt mật khẩu mới cho \"" + resolvedUser + "\"");
-                        }
-                        if (tvOtpDeliveryStatus != null) {
-                            tvOtpDeliveryStatus.setText("Mã OTP đã được gửi tới " + resolvedUser + " và vẫn còn hiệu lực (3 phút).");
-                        }
-                        startForgotCountdown.run();
+                        // Mã OTP đã gửi trước đó vẫn còn hạn -> Cho phép vào Bước 2 với đúng thời gian chờ còn lại
                         String errMsg = extractErrorMessage(response, "Mã OTP đã gửi trước đó vẫn còn hiệu lực.");
+                        verifiedPhoneHolder[0] = contactInput;
+                        verifiedOtpHolder[0] = "";
+                        if (etForgotOtpCode != null) etForgotOtpCode.setText("");
+                        if (etNewPassword != null) etNewPassword.setText("");
+                        if (etConfirmPassword != null) etConfirmPassword.setText("");
+
+                        showStep.accept(2);
+                        if (tvOtpDeliveryStatus != null) {
+                            tvOtpDeliveryStatus.setText("Mã OTP đã được gửi tới " + contactInput + " và vẫn còn hiệu lực (3 phút).");
+                        }
+                        if (etForgotOtpCode != null) etForgotOtpCode.requestFocus();
+                        startForgotCountdown.accept(extractOtpCooldownMillis(errMsg));
                         Toast.makeText(requireContext(), errMsg, Toast.LENGTH_SHORT).show();
                     } else {
-                        String errMsg = "Thông tin xác minh không khớp với tài khoản!";
-                        if (response.body() != null && response.body().get("message") != null) {
-                            errMsg = String.valueOf(response.body().get("message"));
-                        }
-                        Toast.makeText(requireContext(), errMsg, Toast.LENGTH_SHORT).show();
+                        String errMsg = extractErrorMessage(response, "Thông tin xác minh không khớp với tài khoản!");
+                        Toast.makeText(requireContext(), errMsg, Toast.LENGTH_LONG).show();
                     }
                 }
 
                 @Override
                 public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                    if (!isAdded() || !dialog.isShowing()) return;
                     progressBar.setVisibility(View.GONE);
                     btnRequestOtp.setEnabled(true);
                     Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
@@ -1202,22 +1241,73 @@ public class AuthFragment extends Fragment {
 
         // Nút "Quay lại" từ Bước 2 về Bước 1
         btnBackToStep1.setOnClickListener(v -> {
-            if (forgotTimerHolder[0] != null) forgotTimerHolder[0].cancel();
-            layoutStep2.setVisibility(View.GONE);
-            layoutStep1.setVisibility(View.VISIBLE);
-            if (tvSubtitle != null) {
-                tvSubtitle.setText("Bước 1/2: Xác minh tài khoản để nhận mã OTP 6 chữ số");
-            }
+            cancelForgotOtpTimer();
+            showStep.accept(1);
         });
 
-        // BƯỚC 2: Bấm "Đổi mật khẩu"
-        btnSubmitForgotPass.setOnClickListener(v -> {
+        // BƯỚC 2: Xác thực OTP trước khi chuyển sang màn hình nhập mật khẩu mới (Bước 3)
+        btnVerifyForgotOtp.setOnClickListener(v -> {
             String otpInput = etForgotOtpCode.getText() != null ? etForgotOtpCode.getText().toString().trim() : "";
+            if (otpInput.length() != 6) {
+                Toast.makeText(requireContext(), "Vui lòng nhập đủ 6 chữ số mã OTP!", Toast.LENGTH_SHORT).show();
+                etForgotOtpCode.requestFocus();
+                return;
+            }
+
+            progressBar.setVisibility(View.VISIBLE);
+            btnVerifyForgotOtp.setEnabled(false);
+
+            Map<String, Object> body = new HashMap<>();
+            body.put("phone", verifiedPhoneHolder[0]);
+            body.put("otp", otpInput);
+
+            apiService.verifyForgotPasswordOtp(body).enqueue(new Callback<Map<String, Object>>() {
+                @Override
+                public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                    if (!isAdded() || !dialog.isShowing()) return;
+                    progressBar.setVisibility(View.GONE);
+                    btnVerifyForgotOtp.setEnabled(true);
+
+                    if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
+                        verifiedOtpHolder[0] = otpInput;
+                        showStep.accept(3);
+                        if (etNewPassword != null) etNewPassword.requestFocus();
+                        Toast.makeText(requireContext(), "Xác thực mã OTP thành công! Vui lòng đặt mật khẩu mới.", Toast.LENGTH_SHORT).show();
+                    } else {
+                        String errMsg = extractErrorMessage(response, "Mã OTP không đúng hoặc đã hết hạn!");
+                        Toast.makeText(requireContext(), errMsg, Toast.LENGTH_SHORT).show();
+                    }
+                }
+
+                @Override
+                public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                    if (!isAdded() || !dialog.isShowing()) return;
+                    progressBar.setVisibility(View.GONE);
+                    btnVerifyForgotOtp.setEnabled(true);
+                    Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            });
+        });
+
+        // Nút "Quay lại" từ Bước 3 về Bước 2
+        btnBackToStep2.setOnClickListener(v -> showStep.accept(2));
+
+        // BƯỚC 3: Nhập mật khẩu mới & xác nhận lại mật khẩu -> Gửi yêu cầu đổi mật khẩu
+        btnSubmitForgotPass.setOnClickListener(v -> {
+            String otpInput = !verifiedOtpHolder[0].isEmpty()
+                    ? verifiedOtpHolder[0]
+                    : (etForgotOtpCode.getText() != null ? etForgotOtpCode.getText().toString().trim() : "");
             String newPass = etNewPassword.getText() != null ? etNewPassword.getText().toString() : "";
             String confirmPass = etConfirmPassword.getText() != null ? etConfirmPassword.getText().toString() : "";
 
             if (otpInput.length() != 6) {
-                Toast.makeText(requireContext(), "Vui lòng nhập đủ 6 chữ số mã OTP!", Toast.LENGTH_SHORT).show();
+                Toast.makeText(requireContext(), "Mã OTP chưa hợp lệ, vui lòng xác thực lại!", Toast.LENGTH_SHORT).show();
+                showStep.accept(2);
+                return;
+            }
+
+            if (newPass.isEmpty() || confirmPass.isEmpty()) {
+                Toast.makeText(requireContext(), "Vui lòng nhập đầy đủ mật khẩu mới và xác nhận mật khẩu!", Toast.LENGTH_SHORT).show();
                 return;
             }
 
@@ -1247,37 +1337,38 @@ public class AuthFragment extends Fragment {
             apiService.forgotPassword(body).enqueue(new Callback<Map<String, Object>>() {
                 @Override
                 public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                    if (!isAdded() || !dialog.isShowing()) return;
                     progressBar.setVisibility(View.GONE);
                     btnSubmitForgotPass.setEnabled(true);
 
                     if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
-                        if (forgotTimerHolder[0] != null) forgotTimerHolder[0].cancel();
+                        cancelForgotOtpTimer();
                         dialog.dismiss();
-                        etPhone.setText(verifiedPhoneHolder[0]);
-                        etPassword.setText(newPass);
 
                         if (response.body().get("user") instanceof Map) {
-                            @SuppressWarnings("unchecked")
-                            String token = (String) response.body().get("token");
-                            if (token != null) prefManager.saveAuthToken(token);
-                            Map<String, Object> userMap = (Map<String, Object>) response.body().get("user");
-                            saveUserDataToPref(userMap);
+                            if (!applyAuthSessionFromResponse(response.body(), false)) {
+                                clearAuthFormInputs();
+                                if (etPhone != null) etPhone.setText(verifiedPhoneHolder[0]);
+                                Toast.makeText(requireContext(), "Phản hồi tài khoản không hợp lệ! Vui lòng đăng nhập lại.", Toast.LENGTH_LONG).show();
+                                return;
+                            }
+                            clearAuthFormInputs();
                             checkLoginState();
                             Toast.makeText(requireContext(), "Xác thực SMS OTP & đặt mật khẩu thành công! Đã tự động đăng nhập.", Toast.LENGTH_LONG).show();
                         } else {
+                            clearAuthFormInputs();
+                            if (etPhone != null) etPhone.setText(verifiedPhoneHolder[0]);
                             Toast.makeText(requireContext(), "Đặt lại mật khẩu thành công! Bạn có thể bấm Đăng nhập ngay.", Toast.LENGTH_LONG).show();
                         }
                     } else {
-                        String errMsg = "Mã OTP không đúng hoặc đã hết hạn!";
-                        if (response.body() != null && response.body().get("message") != null) {
-                            errMsg = String.valueOf(response.body().get("message"));
-                        }
+                        String errMsg = extractErrorMessage(response, "Không thể đặt lại mật khẩu. Vui lòng thử lại!");
                         Toast.makeText(requireContext(), errMsg, Toast.LENGTH_SHORT).show();
                     }
                 }
 
                 @Override
                 public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                    if (!isAdded() || !dialog.isShowing()) return;
                     progressBar.setVisibility(View.GONE);
                     btnSubmitForgotPass.setEnabled(true);
                     Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
@@ -1289,73 +1380,56 @@ public class AuthFragment extends Fragment {
     }
 
     private void uploadAvatarToCloudinary(Uri imageUri) {
+        if (!isAdded() || getView() == null) return;
         progressBar.setVisibility(View.VISIBLE);
         Long userId = prefManager.getUserId();
+        android.content.Context appContext = requireContext().getApplicationContext();
+        android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
 
-        // 1. Thử gửi file ảnh qua API Backend Spring Boot (sử dụng Cloudinary Java SDK của Backend)
-        okhttp3.MultipartBody.Part filePart = CloudinaryHelper.prepareFilePart(requireContext(), imageUri, "file");
-        if (filePart != null) {
-            apiService.uploadAvatarFile(userId, filePart).enqueue(new Callback<Map<String, Object>>() {
-                @Override
-                public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
-                    if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
-                        progressBar.setVisibility(View.GONE);
-                        String newAvatarUrl = (String) response.body().get("avatarUrl");
-                        if (newAvatarUrl != null) {
-                            prefManager.updateAvatarUrl(newAvatarUrl);
-                            Glide.with(AuthFragment.this).load(newAvatarUrl).circleCrop().into(ivAvatar);
-                        }
-                        Toast.makeText(requireContext(), "Tải ảnh đại diện qua máy chủ Artifex thành công!", Toast.LENGTH_SHORT).show();
-                    } else {
-                        // Nếu backend chưa cấu hình Cloudinary Secret thật hoặc lỗi -> fallback sang client upload
-                        uploadAvatarDirectlyToCloudinary(imageUri);
-                    }
+        // Nén/resize ảnh ở luồng nền rồi gửi qua Backend Spring Boot
+        new Thread(() -> {
+            okhttp3.MultipartBody.Part filePart = CloudinaryHelper.prepareFilePart(appContext, imageUri, "file");
+            mainHandler.post(() -> {
+                if (!isAdded() || getView() == null) return;
+                if (filePart == null) {
+                    progressBar.setVisibility(View.GONE);
+                    Toast.makeText(requireContext(), "Tệp ảnh không hợp lệ hoặc không thể đọc ảnh!", Toast.LENGTH_SHORT).show();
+                    return;
                 }
 
-                @Override
-                public void onFailure(Call<Map<String, Object>> call, Throwable t) {
-                    // Nếu lỗi kết nối máy chủ -> tự động fallback sang client upload
-                    uploadAvatarDirectlyToCloudinary(imageUri);
-                }
-            });
-        } else {
-            uploadAvatarDirectlyToCloudinary(imageUri);
-        }
-    }
-
-    private void uploadAvatarDirectlyToCloudinary(Uri imageUri) {
-        CloudinaryHelper.uploadImage(requireContext(), imageUri, new CloudinaryHelper.UploadCallback() {
-            @Override
-            public void onSuccess(String imageUrl) {
-                Long userId = prefManager.getUserId();
-                Map<String, Object> body = new HashMap<>();
-                body.put("avatarUrl", imageUrl);
-
-                apiService.updateAvatar(userId, body).enqueue(new Callback<Map<String, Object>>() {
+                apiService.uploadAvatarFile(userId, filePart).enqueue(new Callback<Map<String, Object>>() {
                     @Override
                     public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                        if (!isAdded() || getView() == null) return;
                         progressBar.setVisibility(View.GONE);
-                        if (response.isSuccessful()) {
-                            prefManager.updateAvatarUrl(imageUrl);
-                            Glide.with(AuthFragment.this).load(imageUrl).circleCrop().into(ivAvatar);
-                            Toast.makeText(requireContext(), "Đổi ảnh đại diện thành công!", Toast.LENGTH_SHORT).show();
+                        if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
+                            String newAvatarUrl = (String) response.body().get("avatarUrl");
+                            if (newAvatarUrl != null && !newAvatarUrl.trim().isEmpty()) {
+                                prefManager.updateAvatarUrl(newAvatarUrl);
+                                Glide.with(AuthFragment.this)
+                                        .load(newAvatarUrl)
+                                        .placeholder(R.drawable.ic_avatar_placeholder)
+                                        .error(R.drawable.ic_avatar_placeholder)
+                                        .circleCrop()
+                                        .into(ivAvatar);
+                            }
+                            Toast.makeText(requireContext(), "Tải ảnh đại diện qua máy chủ Artifex thành công!", Toast.LENGTH_SHORT).show();
+                        } else {
+                            Toast.makeText(requireContext(),
+                                    extractErrorMessage(response, "Không thể tải ảnh đại diện lên máy chủ!"),
+                                    Toast.LENGTH_LONG).show();
                         }
                     }
 
                     @Override
                     public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                        if (!isAdded() || getView() == null) return;
                         progressBar.setVisibility(View.GONE);
-                        Toast.makeText(requireContext(), "Lỗi lưu avatar: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                        Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
                     }
                 });
-            }
-
-            @Override
-            public void onError(String error) {
-                progressBar.setVisibility(View.GONE);
-                Toast.makeText(requireContext(), error, Toast.LENGTH_SHORT).show();
-            }
-        });
+            });
+        }).start();
     }
 
     // ================= SỔ ĐỊA CHỈ (CHỌN MẶC ĐỊNH, THÊM, SỬA, XÁC NHẬN XÓA) =================
@@ -1597,6 +1671,7 @@ public class AuthFragment extends Fragment {
             apiService.changePassword(userId, body).enqueue(new Callback<Map<String, Object>>() {
                 @Override
                 public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                    if (!isAdded() || !dialog.isShowing()) return;
                     progressBar.setVisibility(View.GONE);
                     btnSubmit.setEnabled(true);
 
@@ -1613,6 +1688,7 @@ public class AuthFragment extends Fragment {
 
                 @Override
                 public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                    if (!isAdded() || !dialog.isShowing()) return;
                     progressBar.setVisibility(View.GONE);
                     btnSubmit.setEnabled(true);
                     Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
@@ -1623,8 +1699,34 @@ public class AuthFragment extends Fragment {
         dialog.show();
     }
 
-    private void saveUserDataToPref(Map<String, Object> user) {
-        Long id = user.get("id") != null ? ((Number) user.get("id")).longValue() : 1L;
+    private boolean applyAuthSessionFromResponse(Map<String, Object> body, boolean forceGoogleAccount) {
+        if (body == null || !(body.get("user") instanceof Map)) {
+            return false;
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> userMap = (Map<String, Object>) body.get("user");
+        if (!saveUserDataToPref(userMap)) {
+            return false;
+        }
+        String token = (String) body.get("token");
+        if (token != null) {
+            prefManager.saveAuthToken(token);
+        }
+        if (forceGoogleAccount) {
+            prefManager.setGoogleAccount(true);
+        }
+        return true;
+    }
+
+    private boolean saveUserDataToPref(Map<String, Object> user) {
+        if (user == null || !(user.get("id") instanceof Number)) {
+            return false;
+        }
+        long idValue = ((Number) user.get("id")).longValue();
+        if (idValue <= 0) {
+            return false;
+        }
+        Long id = idValue;
         String firebaseUid = (String) user.get("firebaseUid");
         String username = (String) user.get("username");
         String email = (String) user.get("email");
@@ -1641,6 +1743,123 @@ public class AuthFragment extends Fragment {
         prefManager.saveUser(id, username, email, fullName, phone, address, avatarUrl);
         prefManager.setGoogleAccount(isGoogleAccount);
         prefManager.updatePersonalInfo(fullName, email, phone, dob, gender != null ? gender : "Nam");
+        return true;
+    }
+
+    private void clearAuthFormInputs() {
+        if (etFullName != null) etFullName.setText("");
+        if (etEmail != null) etEmail.setText("");
+        if (etPhone != null) etPhone.setText("");
+        if (etPassword != null) etPassword.setText("");
+        if (etConfirmPassword != null) etConfirmPassword.setText("");
+        clearEmailError();
+    }
+
+    private void resetAvatarPlaceholder() {
+        if (!isAdded() || ivAvatar == null) return;
+        Glide.with(this).clear(ivAvatar);
+        ivAvatar.setImageResource(R.drawable.ic_avatar_placeholder);
+    }
+
+    private void signOutFirebaseClient(boolean clearCredentialState) {
+        if (!isAdded()) return;
+        mAuth = FirebaseAuthHelper.getFirebaseAuth(requireContext());
+        if (mAuth != null) {
+            mAuth.signOut();
+        }
+        if (!clearCredentialState) return;
+        try {
+            androidx.credentials.CredentialManager credentialManager =
+                    androidx.credentials.CredentialManager.create(requireContext());
+            androidx.credentials.ClearCredentialStateRequest clearRequest =
+                    new androidx.credentials.ClearCredentialStateRequest();
+            credentialManager.clearCredentialStateAsync(
+                    clearRequest,
+                    new android.os.CancellationSignal(),
+                    ContextCompat.getMainExecutor(requireContext()),
+                    new androidx.credentials.CredentialManagerCallback<Void, androidx.credentials.exceptions.ClearCredentialException>() {
+                        @Override
+                        public void onResult(Void result) {}
+
+                        @Override
+                        public void onError(@NonNull androidx.credentials.exceptions.ClearCredentialException e) {}
+                    });
+        } catch (Exception ignored) {}
+    }
+
+    private void cancelRegisterOtpTimer() {
+        if (registerOtpTimer != null) {
+            registerOtpTimer.cancel();
+            registerOtpTimer = null;
+        }
+    }
+
+    private void cancelForgotOtpTimer() {
+        if (forgotOtpTimer != null) {
+            forgotOtpTimer.cancel();
+            forgotOtpTimer = null;
+        }
+    }
+
+    private CountDownTimer startOtpCountdown(
+            long durationMillis,
+            TextView tvCountdown,
+            View btnResend,
+            java.util.function.BooleanSupplier isUiActive) {
+        if (durationMillis <= 0) {
+            if (tvCountdown != null) tvCountdown.setVisibility(View.GONE);
+            if (btnResend != null) btnResend.setVisibility(View.VISIBLE);
+            return null;
+        }
+        return new CountDownTimer(durationMillis, 1000) {
+            @Override
+            public void onTick(long millisUntilFinished) {
+                if (!isUiActive.getAsBoolean()) {
+                    cancel();
+                    return;
+                }
+                if (tvCountdown != null) {
+                    tvCountdown.setVisibility(View.VISIBLE);
+                    long totalSec = millisUntilFinished / 1000;
+                    long min = totalSec / 60;
+                    long sec = totalSec % 60;
+                    String timeStr = min > 0
+                            ? String.format(Locale.getDefault(), "%d:%02d", min, sec)
+                            : totalSec + "s";
+                    tvCountdown.setText("Gửi lại mã sau " + timeStr);
+                }
+                if (btnResend != null) {
+                    btnResend.setVisibility(View.GONE);
+                }
+            }
+
+            @Override
+            public void onFinish() {
+                if (!isUiActive.getAsBoolean()) return;
+                if (tvCountdown != null) {
+                    tvCountdown.setVisibility(View.GONE);
+                }
+                if (btnResend != null) {
+                    btnResend.setVisibility(View.VISIBLE);
+                }
+            }
+        }.start();
+    }
+
+    private long extractOtpCooldownMillis(String message) {
+        if (message == null) return 0L;
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("(\\d+)\\s*giây")
+                .matcher(message);
+        if (matcher.find()) {
+            try {
+                long seconds = Long.parseLong(matcher.group(1));
+                if (seconds > 0) {
+                    return Math.min(seconds, 180L) * 1000L;
+                }
+            } catch (NumberFormatException ignored) {}
+        }
+        return 0L;
     }
 
     // ==================== RECOMMENDATIONS (ĐỘC LẬP TRONG PACKAGE UI/AUTH) ====================

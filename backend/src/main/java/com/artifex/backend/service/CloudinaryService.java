@@ -24,13 +24,16 @@ public class CloudinaryService {
     }
 
     /**
-     * Upload an image file to Cloudinary under the specified folder.
+     * Upload an image file to Cloudinary under the specified folder using signed upload.
      * Returns the secure public URL of the uploaded image.
-     * Tự động fallback sang unsignedUpload ("artifex_avatar") nếu backend chưa cấu hình Secret.
      */
     public String uploadImage(MultipartFile file, String folder) throws IOException {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("File cannot be empty");
+        }
+
+        if (!hasSignedCredentials()) {
+            throw new IOException("Cloudinary chưa được cấu hình API Key/Secret trên máy chủ.");
         }
 
         try {
@@ -43,20 +46,17 @@ public class CloudinaryService {
             );
             return (String) uploadResult.get("secure_url");
         } catch (Exception e) {
-            // Tự động fallback sang unsigned upload với preset "artifex_avatar"
-            try {
-                Map<?, ?> uploadResult = cloudinary.uploader().unsignedUpload(
-                        file.getBytes(),
-                        "artifex_avatar",
-                        ObjectUtils.asMap(
-                                "folder", folder,
-                                "resource_type", "image"
-                        )
-                );
-                return (String) uploadResult.get("secure_url");
-            } catch (Exception fallbackEx) {
-                throw new IOException("Lỗi upload ảnh lên Cloudinary: " + fallbackEx.getMessage(), fallbackEx);
-            }
+            throw new IOException("Lỗi upload ảnh lên Cloudinary: " + e.getMessage(), e);
         }
+    }
+
+    private boolean hasSignedCredentials() {
+        if (cloudinary == null || cloudinary.config == null) {
+            return false;
+        }
+        String key = cloudinary.config.apiKey;
+        String secret = cloudinary.config.apiSecret;
+        return key != null && !key.trim().isEmpty() && !"demo".equalsIgnoreCase(key.trim())
+                && secret != null && !secret.trim().isEmpty() && !"demo".equalsIgnoreCase(secret.trim());
     }
 }

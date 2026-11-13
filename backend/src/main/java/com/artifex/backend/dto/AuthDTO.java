@@ -78,6 +78,14 @@ public class AuthDTO {
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
+    public static class ForgotPasswordVerifyOtpRequest {
+        private String phone;
+        private String otp;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class ForgotPasswordRequest {
         private String phone;
         private String otp;
