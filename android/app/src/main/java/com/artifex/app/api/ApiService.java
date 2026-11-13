@@ -94,4 +94,8 @@ public interface ApiService {
     @Multipart
     @POST("api/reviews/upload-image")
     Call<Map<String, String>> uploadReviewImage(@Part MultipartBody.Part file);
+
+    // ==================== CART & CHECKOUT APIS (Hieu) ====================
+    @retrofit2.http.POST("api/orders")
+    retrofit2.Call<java.util.Map<String, Object>> createOrder(@retrofit2.http.Body java.util.Map<String, Object> body);
 }
