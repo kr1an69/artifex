@@ -23,6 +23,7 @@ public class SharedPrefManager {
     private static final String KEY_ADDRESS = "key_address";
     private static final String KEY_AVATAR_URL = "key_avatar_url";
     private static final String KEY_IS_LOGGED_IN = "key_is_logged_in";
+    private static final String KEY_IS_GOOGLE_ACCOUNT = "key_is_google_account";
     private static final String KEY_AUTH_TOKEN = "key_auth_token";
     private static final String KEY_ADDRESS_LIST_PREFIX = "key_address_list_";
 
@@ -49,7 +50,7 @@ public class SharedPrefManager {
     public void saveUser(Long id, String username, String email, String fullName, String phone, String address, String avatarUrl) {
         SharedPreferences sp = ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = sp.edit();
-        editor.putLong(KEY_USER_ID, id != null ? id : 1L);
+        editor.putLong(KEY_USER_ID, id != null ? id : -1L);
         editor.putString(KEY_USERNAME, username);
         editor.putString(KEY_EMAIL, email);
         editor.putString(KEY_FULL_NAME, fullName);
@@ -74,7 +75,10 @@ public class SharedPrefManager {
     }
 
     public Long getUserId() {
-        return ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).getLong(KEY_USER_ID, 1L);
+        if (!isLoggedIn()) {
+            return -1L;
+        }
+        return ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).getLong(KEY_USER_ID, -1L);
     }
 
     public String getFullName() {
@@ -269,6 +273,17 @@ public class SharedPrefManager {
         return "";
     }
 
+    public void setGoogleAccount(boolean isGoogleAccount) {
+        ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).edit()
+                .putBoolean(KEY_IS_GOOGLE_ACCOUNT, isGoogleAccount)
+                .apply();
+    }
+
+    public boolean isGoogleAccount() {
+        return ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE)
+                .getBoolean(KEY_IS_GOOGLE_ACCOUNT, false);
+    }
+
     public void clear() {
         SharedPreferences.Editor editor = ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).edit();
         editor.remove(KEY_USER_ID);
@@ -281,6 +296,7 @@ public class SharedPrefManager {
         editor.remove(KEY_GENDER);
         editor.remove(KEY_ADDRESS);
         editor.remove(KEY_AVATAR_URL);
+        editor.remove(KEY_IS_GOOGLE_ACCOUNT);
         editor.putBoolean(KEY_IS_LOGGED_IN, false);
         editor.apply();
     }

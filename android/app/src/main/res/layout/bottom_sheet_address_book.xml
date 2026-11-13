@@ -5,7 +5,7 @@
     android:layout_height="wrap_content"
     android:background="@drawable/bg_bottom_sheet_surface"
     android:orientation="vertical"
-    android:padding="20dp">
+    android:padding="24dp">
 
     <!-- Thanh kéo nhỏ (Handle bar) -->
     <View
@@ -31,7 +31,7 @@
         android:layout_marginTop="4dp"
         android:text="Chạm vào một địa chỉ để chọn làm địa chỉ giao hàng chính"
         android:textColor="@color/artifex_text_secondary"
-        android:textSize="13sp" />
+        android:textSize="12sp" />
 
     <!-- Nút Thêm địa chỉ mới (Đặt ở trên để luôn hiển thị rõ ràng, không bao giờ bị danh sách đẩy trôi) -->
     <com.google.android.material.button.MaterialButton
