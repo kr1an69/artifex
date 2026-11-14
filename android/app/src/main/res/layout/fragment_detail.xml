@@ -9,7 +9,8 @@
     <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
         android:id="@+id/swipeRefreshDetail"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:layout_marginBottom="68dp">
 
         <androidx.core.widget.NestedScrollView
             android:layout_width="match_parent"
@@ -240,7 +241,71 @@
                             </LinearLayout>
                         </LinearLayout>
 
-                        <!-- Nút Thêm vào Giỏ hàng (Kết nối Room Database của Hiếu) -->
+                        <!-- Quantity Selector Stepper (Chuẩn TMĐT Shopee [-] 1 [+]) -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="14dp"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Số lượng mua:"
+                                android:textColor="@color/artifex_text_secondary"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <View
+                                android:layout_width="0dp"
+                                android:layout_height="1dp"
+                                android:layout_weight="1" />
+
+                            <!-- Stepper Container -->
+                            <LinearLayout
+                                android:layout_width="wrap_content"
+                                android:layout_height="36dp"
+                                android:background="@drawable/bg_badge_pill"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal"
+                                android:paddingHorizontal="4dp">
+
+                                <ImageView
+                                    android:id="@+id/btnDecreaseQty"
+                                    android:layout_width="28dp"
+                                    android:layout_height="28dp"
+                                    android:background="?attr/selectableItemBackgroundBorderless"
+                                    android:clickable="true"
+                                    android:contentDescription="Decrease"
+                                    android:focusable="true"
+                                    android:padding="6dp"
+                                    android:src="@drawable/ic_minus" />
+
+                                <TextView
+                                    android:id="@+id/tvQuantity"
+                                    android:layout_width="40dp"
+                                    android:layout_height="wrap_content"
+                                    android:gravity="center"
+                                    android:text="1"
+                                    android:textColor="@color/artifex_text_primary"
+                                    android:textSize="15sp"
+                                    android:textStyle="bold" />
+
+                                <ImageView
+                                    android:id="@+id/btnIncreaseQty"
+                                    android:layout_width="28dp"
+                                    android:layout_height="28dp"
+                                    android:background="?attr/selectableItemBackgroundBorderless"
+                                    android:clickable="true"
+                                    android:contentDescription="Increase"
+                                    android:focusable="true"
+                                    android:padding="6dp"
+                                    android:src="@drawable/ic_plus" />
+                            </LinearLayout>
+                        </LinearLayout>
+
+                        <!-- Nút Thêm vào giỏ hàng ngay trên card sản phẩm -->
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btnAddToCartDetail"
                             android:layout_width="match_parent"
@@ -549,7 +614,7 @@
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
-                <!-- 3. Bộ lọc Đánh giá (Filter Chips) -->
+                <!-- 3. Bộ lọc Đánh giá (Filter Chips có số lượng động) -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -604,7 +669,7 @@
                             style="@style/Widget.MaterialComponents.Chip.Choice"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Có hình ảnh" />
+                            android:text="Có ảnh" />
 
                         <com.google.android.material.chip.Chip
                             android:id="@+id/chipFilter5Star"
@@ -667,4 +732,76 @@
             </LinearLayout>
         </androidx.core.widget.NestedScrollView>
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+    <!-- 5. Thanh Sticky Bottom Bar (Chuẩn Shopee/Lazada/Tiki - Luôn cố định chân màn hình) -->
+    <androidx.cardview.widget.CardView
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:layout_gravity="bottom"
+        app:cardBackgroundColor="@color/artifex_surface"
+        app:cardCornerRadius="0dp"
+        app:cardElevation="8dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp">
+
+            <!-- Cột trái: Giá tiền tổng theo số lượng -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tvBottomPriceLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Tổng tiền (1 sp):"
+                    android:textColor="@color/artifex_text_muted"
+                    android:textSize="11sp" />
+
+                <TextView
+                    android:id="@+id/tvBottomTotalPrice"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="7.890.000 đ"
+                    android:textColor="@color/artifex_accent"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Nút Thêm vào giỏ hàng (Icon Outlined) -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnAddToCartBottom"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:text="Thêm vào giỏ"
+                android:textColor="@color/artifex_primary"
+                android:textSize="13sp"
+                app:cornerRadius="10dp"
+                app:icon="@drawable/ic_nav_cart"
+                app:iconGravity="textStart"
+                app:iconTint="@color/artifex_primary"
+                app:strokeColor="@color/artifex_primary"
+                app:strokeWidth="1dp" />
+
+            <!-- Nút Mua Ngay (Primary Filled - Chuyển sang giỏ hàng thanh toán ngay) -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnBuyNowBottom"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:layout_marginStart="8dp"
+                android:backgroundTint="@color/artifex_primary"
+                android:text="Mua ngay"
+                android:textColor="@color/artifex_on_primary"
+                android:textSize="13sp"
+                app:cornerRadius="10dp" />
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

@@ -26,6 +26,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
+import com.artifex.app.MainActivity;
 import com.artifex.app.R;
 import com.artifex.app.api.ApiService;
 import com.artifex.app.api.RetrofitClient;
@@ -37,6 +38,7 @@ import com.artifex.app.data.model.ReviewRequest;
 import com.artifex.app.data.model.ReviewResponse;
 import com.artifex.app.ui.auth.SharedPrefManager;
 import com.bumptech.glide.Glide;
+import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.chip.Chip;
@@ -62,10 +64,12 @@ import retrofit2.Response;
 
 /**
  * Fragment Chi tiết linh kiện & Đánh giá (Đức - Bạn 3)
- * Tích hợp đầy đủ:
- * 1. Biểu đồ thanh phân bố sao (5 sao -> 1 sao)
- * 2. Bộ lọc đánh giá (Tất cả, Có hình ảnh, 5★ -> 1★)
- * 3. Thông số kỹ thuật linh kiện thực tế + Thêm vào giỏ hàng Room DB + Lấy User từ SharedPrefManager
+ * Chuẩn TMĐT Shopee/Lazada:
+ * 1. Biểu đồ thanh 5 sao -> 1 sao trực quan
+ * 2. Bộ lọc Filter Chips kèm số lượng đánh giá động (Tất cả (N), Có ảnh (N), 5★ (N)...)
+ * 3. Bộ chọn số lượng Stepper [-] 1 [+] và thanh Sticky Bottom Bar cố định chân màn hình (Thêm giỏ / Mua ngay)
+ * 4. Popup viết đánh giá có tag gợi ý nhanh (Chất lượng, Đóng gói, Giao hàng...) và bộ đếm ký tự
+ * 5. Kết nối đầy đủ: Room DB giỏ hàng (Hiếu), User đăng nhập (Khoa), API sản phẩm (Đạt)
  */
 public class DetailFragment extends Fragment {
 
@@ -74,7 +78,9 @@ public class DetailFragment extends Fragment {
     private long currentProductId = 1L;
     private String currentProductName = "Intel Core i5-13600K";
     private double currentProductPrice = 7890000.0;
+    private int currentProductStock = 25;
     private String currentProductImage = "https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?auto=format&fit=crop&w=800&q=80";
+    private int selectedQuantity = 1;
 
     private SwipeRefreshLayout swipeRefreshDetail;
     private ChipGroup chipGroupProducts;
@@ -83,7 +89,13 @@ public class DetailFragment extends Fragment {
     private ImageView imgProductThumb;
     private TextView tvProductCategory, tvProductStock, tvProductName, tvProductPrice, tvProductDescription;
     private TextView tvSpecCode, tvSpecCategory;
+    private ImageView btnDecreaseQty, btnIncreaseQty;
+    private TextView tvQuantity;
     private MaterialButton btnAddToCartDetail;
+
+    // Views Sticky Bottom Bar (Shopee Standard)
+    private TextView tvBottomPriceLabel, tvBottomTotalPrice;
+    private MaterialButton btnAddToCartBottom, btnBuyNowBottom;
 
     // Views thống kê Rating & Biểu đồ phân bố sao
     private TextView tvAverageRating, tvTotalReviews;
@@ -95,6 +107,7 @@ public class DetailFragment extends Fragment {
     // Views bộ lọc & danh sách đánh giá
     private TextView tvReviewListTitle, tvEmptyReviews;
     private ChipGroup chipGroupReviewFilter;
+    private Chip chipFilterAll, chipFilterWithImage, chipFilter5Star, chipFilter4Star, chipFilter3Star, chipFilter2Star, chipFilter1Star;
     private ProgressBar progressBarReviews;
     private RecyclerView rvReviews;
 
@@ -160,6 +173,7 @@ public class DetailFragment extends Fragment {
         initViews(view);
         setupRecyclerView();
         setupProductSwitcher();
+        setupQuantityStepper();
         setupEvents();
 
         // Tải toàn bộ thông tin của sản phẩm hiện tại
@@ -178,7 +192,16 @@ public class DetailFragment extends Fragment {
         tvProductDescription = view.findViewById(R.id.tvProductDescription);
         tvSpecCode = view.findViewById(R.id.tvSpecCode);
         tvSpecCategory = view.findViewById(R.id.tvSpecCategory);
+
+        btnDecreaseQty = view.findViewById(R.id.btnDecreaseQty);
+        tvQuantity = view.findViewById(R.id.tvQuantity);
+        btnIncreaseQty = view.findViewById(R.id.btnIncreaseQty);
         btnAddToCartDetail = view.findViewById(R.id.btnAddToCartDetail);
+
+        tvBottomPriceLabel = view.findViewById(R.id.tvBottomPriceLabel);
+        tvBottomTotalPrice = view.findViewById(R.id.tvBottomTotalPrice);
+        btnAddToCartBottom = view.findViewById(R.id.btnAddToCartBottom);
+        btnBuyNowBottom = view.findViewById(R.id.btnBuyNowBottom);
 
         tvAverageRating = view.findViewById(R.id.tvAverageRating);
         tvTotalReviews = view.findViewById(R.id.tvTotalReviews);
@@ -197,6 +220,14 @@ public class DetailFragment extends Fragment {
 
         tvReviewListTitle = view.findViewById(R.id.tvReviewListTitle);
         chipGroupReviewFilter = view.findViewById(R.id.chipGroupReviewFilter);
+        chipFilterAll = view.findViewById(R.id.chipFilterAll);
+        chipFilterWithImage = view.findViewById(R.id.chipFilterWithImage);
+        chipFilter5Star = view.findViewById(R.id.chipFilter5Star);
+        chipFilter4Star = view.findViewById(R.id.chipFilter4Star);
+        chipFilter3Star = view.findViewById(R.id.chipFilter3Star);
+        chipFilter2Star = view.findViewById(R.id.chipFilter2Star);
+        chipFilter1Star = view.findViewById(R.id.chipFilter1Star);
+
         progressBarReviews = view.findViewById(R.id.progressBarReviews);
         tvEmptyReviews = view.findViewById(R.id.tvEmptyReviews);
         rvReviews = view.findViewById(R.id.rvReviews);
@@ -210,11 +241,7 @@ public class DetailFragment extends Fragment {
         reviewAdapter.setOnImageClickListener(this::showEnlargedImageDialog);
     }
 
-    /**
-     * Thanh chọn nhanh linh kiện (hỗ trợ test chuyển đổi nhiều sản phẩm trong seed_data.sql)
-     */
     private void setupProductSwitcher() {
-        // Tạo sẵn các chip mặc định khớp với seed_data.sql
         long[] defaultIds = {1L, 2L, 4L, 7L, 9L, 11L};
         String[] defaultNames = {
                 "#1 Core i5-13600K",
@@ -227,7 +254,6 @@ public class DetailFragment extends Fragment {
 
         populateProductChips(defaultIds, defaultNames);
 
-        // Đồng thời gọi API lấy danh sách sản phẩm thật từ Backend nếu server đang chạy
         apiService.getProducts(14).enqueue(new Callback<Map<String, Object>>() {
             @Override
             public void onResponse(@NonNull Call<Map<String, Object>> call, @NonNull Response<Map<String, Object>> response) {
@@ -281,10 +307,47 @@ public class DetailFragment extends Fragment {
             chip.setOnClickListener(v -> {
                 if (currentProductId != prodId) {
                     currentProductId = prodId;
+                    selectedQuantity = 1;
+                    updateQuantityUi();
                     refreshAllData();
                 }
             });
             chipGroupProducts.addView(chip);
+        }
+    }
+
+    private void setupQuantityStepper() {
+        updateQuantityUi();
+
+        btnDecreaseQty.setOnClickListener(v -> {
+            if (selectedQuantity > 1) {
+                selectedQuantity--;
+                updateQuantityUi();
+            } else {
+                Toast.makeText(requireContext(), "Số lượng tối thiểu là 1", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        btnIncreaseQty.setOnClickListener(v -> {
+            if (selectedQuantity < currentProductStock) {
+                selectedQuantity++;
+                updateQuantityUi();
+            } else {
+                Toast.makeText(requireContext(), "Chỉ còn tối đa " + currentProductStock + " sản phẩm trong kho", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void updateQuantityUi() {
+        if (tvQuantity != null) {
+            tvQuantity.setText(String.valueOf(selectedQuantity));
+        }
+        if (tvBottomPriceLabel != null) {
+            tvBottomPriceLabel.setText(String.format(Locale.getDefault(), "Tổng tiền (%d sp):", selectedQuantity));
+        }
+        if (tvBottomTotalPrice != null) {
+            double total = currentProductPrice * selectedQuantity;
+            tvBottomTotalPrice.setText(formatVndPrice(total));
         }
     }
 
@@ -293,7 +356,18 @@ public class DetailFragment extends Fragment {
 
         btnOpenWriteReview.setOnClickListener(v -> showWriteReviewDialog());
 
-        btnAddToCartDetail.setOnClickListener(v -> addCurrentProductToCart());
+        // Nút thêm giỏ hàng ở cả 2 vị trí (Card sản phẩm và Sticky Bottom Bar)
+        if (btnAddToCartDetail != null) {
+            btnAddToCartDetail.setOnClickListener(v -> addCurrentProductToCart(false));
+        }
+        if (btnAddToCartBottom != null) {
+            btnAddToCartBottom.setOnClickListener(v -> addCurrentProductToCart(false));
+        }
+
+        // Nút Mua ngay (Thêm giỏ hàng + tự động mở Tab Giỏ hàng)
+        if (btnBuyNowBottom != null) {
+            btnBuyNowBottom.setOnClickListener(v -> addCurrentProductToCart(true));
+        }
 
         chipGroupReviewFilter.setOnCheckedStateChangeListener((group, checkedIds) -> applyReviewFilter());
     }
@@ -308,7 +382,6 @@ public class DetailFragment extends Fragment {
      * Tải chi tiết linh kiện từ API GET /api/products/{id} (Của bạn Đạt)
      */
     private void loadProductDetail() {
-        // Cập nhật mã linh kiện trước
         tvSpecCode.setText(String.format(Locale.getDefault(), "ART-PC-%03d", currentProductId));
 
         apiService.getProductById(currentProductId).enqueue(new Callback<Map<String, Object>>() {
@@ -330,6 +403,7 @@ public class DetailFragment extends Fragment {
 
                             currentProductName = name;
                             currentProductPrice = price;
+                            currentProductStock = stock;
                             currentProductImage = imageUrl;
 
                             tvProductName.setText(name);
@@ -338,14 +412,20 @@ public class DetailFragment extends Fragment {
                             tvProductCategory.setText(categoryName.toUpperCase());
                             tvSpecCategory.setText("Danh mục " + categoryName + " chính hãng");
 
+                            updateQuantityUi();
+
                             if (stock > 0) {
                                 tvProductStock.setText(String.format(Locale.getDefault(), "✓ Còn hàng (%d)", stock));
                                 tvProductStock.setTextColor(ContextCompat.getColor(requireContext(), R.color.artifex_success));
-                                btnAddToCartDetail.setEnabled(true);
+                                if (btnAddToCartDetail != null) btnAddToCartDetail.setEnabled(true);
+                                if (btnAddToCartBottom != null) btnAddToCartBottom.setEnabled(true);
+                                if (btnBuyNowBottom != null) btnBuyNowBottom.setEnabled(true);
                             } else {
                                 tvProductStock.setText("✕ Tạm hết hàng");
                                 tvProductStock.setTextColor(ContextCompat.getColor(requireContext(), R.color.artifex_error));
-                                btnAddToCartDetail.setEnabled(false);
+                                if (btnAddToCartDetail != null) btnAddToCartDetail.setEnabled(false);
+                                if (btnAddToCartBottom != null) btnAddToCartBottom.setEnabled(false);
+                                if (btnBuyNowBottom != null) btnBuyNowBottom.setEnabled(false);
                             }
 
                             if (!TextUtils.isEmpty(imageUrl)) {
@@ -364,15 +444,15 @@ public class DetailFragment extends Fragment {
 
             @Override
             public void onFailure(@NonNull Call<Map<String, Object>> call, @NonNull Throwable t) {
-                // Giữ thông tin mặc định trên UI nếu server chưa bật
             }
         });
     }
 
     /**
-     * Thêm sản phẩm hiện tại vào Giỏ hàng (Room Database của bạn Hiếu)
+     * Thêm sản phẩm hiện tại vào Giỏ hàng Room DB (của Hiếu) theo số lượng đã chọn
+     * @param navigateToCart true nếu là bấm Mua Ngay (chuyển sang tab Giỏ hàng)
      */
-    private void addCurrentProductToCart() {
+    private void addCurrentProductToCart(boolean navigateToCart) {
         new Thread(() -> {
             try {
                 CartDao cartDao = AppDatabase.getInstance(requireContext()).cartDao();
@@ -388,23 +468,29 @@ public class DetailFragment extends Fragment {
                 }
 
                 if (existing != null) {
-                    existing.setQuantity(existing.getQuantity() + 1);
+                    existing.setQuantity(existing.getQuantity() + selectedQuantity);
                     cartDao.update(existing);
                 } else {
                     CartItem newItem = new CartItem(
                             (int) currentProductId,
                             currentProductName,
                             currentProductPrice,
-                            1,
+                            selectedQuantity,
                             currentProductImage
                     );
                     cartDao.insert(newItem);
                 }
 
                 if (getActivity() != null) {
-                    getActivity().runOnUiThread(() ->
-                            Toast.makeText(requireContext(), "🛍️ Đã thêm " + currentProductName + " vào giỏ hàng!", Toast.LENGTH_SHORT).show()
-                    );
+                    getActivity().runOnUiThread(() -> {
+                        Toast.makeText(requireContext(), "🛍️ Đã thêm " + selectedQuantity + "x " + currentProductName + " vào giỏ hàng!", Toast.LENGTH_SHORT).show();
+                        if (navigateToCart && getActivity() instanceof MainActivity) {
+                            BottomNavigationView nav = getActivity().findViewById(R.id.bottom_navigation);
+                            if (nav != null) {
+                                nav.setSelectedItemId(R.id.nav_cart);
+                            }
+                        }
+                    });
                 }
             } catch (Exception e) {
                 if (getActivity() != null) {
@@ -479,7 +565,7 @@ public class DetailFragment extends Fragment {
     }
 
     /**
-     * Tải danh sách đánh giá từ API
+     * Tải danh sách đánh giá từ API và cập nhật số lượng động trên Filter Chips (Shopee Style)
      */
     private void loadReviews() {
         progressBarReviews.setVisibility(View.VISIBLE);
@@ -492,6 +578,7 @@ public class DetailFragment extends Fragment {
                 if (response.isSuccessful() && response.body() != null) {
                     allReviews.clear();
                     allReviews.addAll(response.body());
+                    updateFilterChipLabels();
                     applyReviewFilter();
                 }
             }
@@ -507,7 +594,36 @@ public class DetailFragment extends Fragment {
     }
 
     /**
-     * Lọc danh sách đánh giá theo Chip đang chọn (Tất cả, Có hình ảnh, 5★ -> 1★)
+     * Cập nhật số lượng đếm trên từng Chip lọc đánh giá chuẩn Shopee (Tất cả (N), Có ảnh (N), 5★ (N)...)
+     */
+    private void updateFilterChipLabels() {
+        int total = allReviews.size();
+        int withImg = 0;
+        int s5 = 0, s4 = 0, s3 = 0, s2 = 0, s1 = 0;
+
+        for (ReviewResponse r : allReviews) {
+            if (!TextUtils.isEmpty(r.getImageUrl())) withImg++;
+            int star = r.getRating() != null ? r.getRating() : 5;
+            switch (star) {
+                case 5: s5++; break;
+                case 4: s4++; break;
+                case 3: s3++; break;
+                case 2: s2++; break;
+                case 1: s1++; break;
+            }
+        }
+
+        if (chipFilterAll != null) chipFilterAll.setText(String.format(Locale.getDefault(), "Tất cả (%d)", total));
+        if (chipFilterWithImage != null) chipFilterWithImage.setText(String.format(Locale.getDefault(), "Có ảnh (%d)", withImg));
+        if (chipFilter5Star != null) chipFilter5Star.setText(String.format(Locale.getDefault(), "5 ★ (%d)", s5));
+        if (chipFilter4Star != null) chipFilter4Star.setText(String.format(Locale.getDefault(), "4 ★ (%d)", s4));
+        if (chipFilter3Star != null) chipFilter3Star.setText(String.format(Locale.getDefault(), "3 ★ (%d)", s3));
+        if (chipFilter2Star != null) chipFilter2Star.setText(String.format(Locale.getDefault(), "2 ★ (%d)", s2));
+        if (chipFilter1Star != null) chipFilter1Star.setText(String.format(Locale.getDefault(), "1 ★ (%d)", s1));
+    }
+
+    /**
+     * Lọc danh sách đánh giá theo Chip đang chọn
      */
     private void applyReviewFilter() {
         if (!isAdded()) return;
@@ -541,7 +657,7 @@ public class DetailFragment extends Fragment {
     }
 
     /**
-     * Hiển thị Dialog viết đánh giá sản phẩm (Kết nối userId từ SharedPrefManager của bạn Khoa)
+     * Hiển thị Dialog viết đánh giá sản phẩm (Gợi ý tag nhanh + Đếm ký tự + Upload Cloudinary)
      */
     private void showWriteReviewDialog() {
         View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_write_review, null);
@@ -557,6 +673,30 @@ public class DetailFragment extends Fragment {
         progressBarDialog = dialogView.findViewById(R.id.progressBarReview);
         MaterialButton btnCancelReview = dialogView.findViewById(R.id.btnCancelReview);
         btnDialogSubmit = dialogView.findViewById(R.id.btnSubmitReview);
+
+        // Tags gợi ý nhanh Shopee
+        TextView tagQuality = dialogView.findViewById(R.id.tagQuality);
+        TextView tagPackaging = dialogView.findViewById(R.id.tagPackaging);
+        TextView tagFastDelivery = dialogView.findViewById(R.id.tagFastDelivery);
+        TextView tagGoodPerformance = dialogView.findViewById(R.id.tagGoodPerformance);
+
+        View.OnClickListener tagClickListener = v -> {
+            if (etComment != null && v instanceof TextView) {
+                String tagText = ((TextView) v).getText().toString().replaceAll("^[⭐📦⚡🔥]\\s*", "");
+                String current = etComment.getText() != null ? etComment.getText().toString().trim() : "";
+                if (current.isEmpty()) {
+                    etComment.setText(tagText);
+                } else if (!current.contains(tagText)) {
+                    etComment.setText(current + ", " + tagText);
+                }
+                etComment.setSelection(etComment.getText().length());
+            }
+        };
+
+        if (tagQuality != null) tagQuality.setOnClickListener(tagClickListener);
+        if (tagPackaging != null) tagPackaging.setOnClickListener(tagClickListener);
+        if (tagFastDelivery != null) tagFastDelivery.setOnClickListener(tagClickListener);
+        if (tagGoodPerformance != null) tagGoodPerformance.setOnClickListener(tagClickListener);
 
         selectedImageUri = null;
         if (tvDialogTitle != null) {
