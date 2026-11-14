@@ -6,10 +6,12 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.RatingBar;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.artifex.app.R;
@@ -19,16 +21,22 @@ import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.imageview.ShapeableImageView;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Adapter hiển thị danh sách đánh giá sản phẩm (Đức - Bạn 3)
- * Sử dụng Glide để load ảnh avatar người dùng và ảnh review từ Cloudinary
+ * Chuẩn TMĐT Shopee/Lazada:
+ * - Load avatar & ảnh Cloudinary qua Glide
+ * - Badge "Đã mua hàng tại Artifex"
+ * - Nút "Hữu ích" tương tác thả like trực tiếp
  */
 public class ReviewAdapter extends RecyclerView.Adapter<ReviewAdapter.ReviewViewHolder> {
 
     private final Context context;
     private final List<ReviewResponse> reviewList = new ArrayList<>();
+    private final Set<Long> likedReviews = new HashSet<>();
     private OnImageClickListener onImageClickListener;
 
     public interface OnImageClickListener {
@@ -70,7 +78,6 @@ public class ReviewAdapter extends RecyclerView.Adapter<ReviewAdapter.ReviewView
         // 2. Ngày tháng (format hiển thị đẹp)
         String dateStr = review.getCreatedAt();
         if (!TextUtils.isEmpty(dateStr)) {
-            // Chuỗi trả về từ backend thường là "2026-10-28T14:30:00" -> đổi "T" thành khoảng trắng
             holder.tvReviewDate.setText(dateStr.replace("T", " "));
         } else {
             holder.tvReviewDate.setText("");
@@ -104,7 +111,6 @@ public class ReviewAdapter extends RecyclerView.Adapter<ReviewAdapter.ReviewView
                     .centerCrop()
                     .into(holder.imgReview);
 
-            // Bấm vào ảnh để xem phóng to
             holder.cardReviewImage.setOnClickListener(v -> {
                 if (onImageClickListener != null) {
                     onImageClickListener.onImageClick(imageUrl);
@@ -112,6 +118,33 @@ public class ReviewAdapter extends RecyclerView.Adapter<ReviewAdapter.ReviewView
             });
         } else {
             holder.cardReviewImage.setVisibility(View.GONE);
+        }
+
+        // 7. Tương tác Nút "Hữu ích" (Shopee Style)
+        final long reviewId = review.getId() != null ? review.getId() : (long) position;
+        boolean isLiked = likedReviews.contains(reviewId);
+        updateHelpfulUi(holder, isLiked);
+
+        holder.btnHelpful.setOnClickListener(v -> {
+            if (likedReviews.contains(reviewId)) {
+                likedReviews.remove(reviewId);
+                updateHelpfulUi(holder, false);
+            } else {
+                likedReviews.add(reviewId);
+                updateHelpfulUi(holder, true);
+            }
+        });
+    }
+
+    private void updateHelpfulUi(ReviewViewHolder holder, boolean isLiked) {
+        if (isLiked) {
+            holder.ivHelpfulIcon.setColorFilter(ContextCompat.getColor(context, R.color.artifex_primary));
+            holder.tvHelpfulCount.setTextColor(ContextCompat.getColor(context, R.color.artifex_primary));
+            holder.tvHelpfulCount.setText("Hữu ích (1)");
+        } else {
+            holder.ivHelpfulIcon.setColorFilter(ContextCompat.getColor(context, R.color.artifex_text_secondary));
+            holder.tvHelpfulCount.setTextColor(ContextCompat.getColor(context, R.color.artifex_text_secondary));
+            holder.tvHelpfulCount.setText("Hữu ích");
         }
     }
 
@@ -128,6 +161,9 @@ public class ReviewAdapter extends RecyclerView.Adapter<ReviewAdapter.ReviewView
         TextView tvComment;
         MaterialCardView cardReviewImage;
         ImageView imgReview;
+        LinearLayout btnHelpful;
+        ImageView ivHelpfulIcon;
+        TextView tvHelpfulCount;
 
         public ReviewViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -138,6 +174,9 @@ public class ReviewAdapter extends RecyclerView.Adapter<ReviewAdapter.ReviewView
             tvComment = itemView.findViewById(R.id.tvComment);
             cardReviewImage = itemView.findViewById(R.id.cardReviewImage);
             imgReview = itemView.findViewById(R.id.imgReview);
+            btnHelpful = itemView.findViewById(R.id.btnHelpful);
+            ivHelpfulIcon = itemView.findViewById(R.id.ivHelpfulIcon);
+            tvHelpfulCount = itemView.findViewById(R.id.tvHelpfulCount);
         }
     }
 }
