@@ -45,7 +45,7 @@ public class OrderHistoryActivity extends AppCompatActivity {
             if (filter == null) {
                 filter = StoreFragment.FILTER_ALL;
             }
-            StoreFragment fragment = StoreFragment.newInstance(filter, true);
+            OrderHistoryFragment fragment = OrderHistoryFragment.newInstance(filter, true);
             getSupportFragmentManager()
                     .beginTransaction()
                     .replace(R.id.order_history_fragment_container, fragment)
