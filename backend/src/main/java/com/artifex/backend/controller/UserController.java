@@ -3,11 +3,15 @@ package com.artifex.backend.controller;
 import com.artifex.backend.dto.AuthDTO.*;
 import com.artifex.backend.entity.User;
 import com.artifex.backend.repository.UserRepository;
+import com.artifex.backend.service.PasswordUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -20,6 +24,7 @@ public class UserController {
 
     private final UserRepository userRepository;
     private final com.artifex.backend.service.TokenService tokenService;
+    private final com.artifex.backend.service.CloudinaryService cloudinaryService;
 
     @GetMapping("/{id}")
     public ResponseEntity<Map<String, Object>> getUserById(@PathVariable Long id,
@@ -37,7 +42,6 @@ public class UserController {
         }
 
         User user = userOpt.get();
-        user.setPassword(null);
 
         response.put("status", "SUCCESS");
         response.put("user", user);
@@ -63,12 +67,13 @@ public class UserController {
         User user = userOpt.get();
         if (request.getEmail() != null && !request.getEmail().trim().isEmpty()) {
             String newEmail = request.getEmail().trim().toLowerCase();
-            if (!newEmail.endsWith("@gmail.com")) {
+            boolean unchangedExistingEmail = user.getEmail() != null && newEmail.equalsIgnoreCase(user.getEmail());
+            if (!unchangedExistingEmail && !newEmail.matches("^[a-zA-Z0-9._%+-]+@(gmail\\.com|artifex\\.vn)$")) {
                 response.put("status", "ERROR");
-                response.put("message", "Email phải có định dạng @gmail.com!");
+                response.put("message", "Email phải có định dạng hợp lệ (@gmail.com hoặc @artifex.vn)!");
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
             }
-            if (!newEmail.equals(user.getEmail()) && userRepository.existsByEmail(newEmail)) {
+            if (!newEmail.equalsIgnoreCase(user.getEmail()) && userRepository.existsByEmail(newEmail)) {
                 response.put("status", "ERROR");
                 response.put("message", "Email đã được sử dụng bởi tài khoản khác!");
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
@@ -86,9 +91,16 @@ public class UserController {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
             }
             String domesticPhone = toDomesticVietnamPhone(rawPhone);
-            String targetNorm = normalizeVietnamPhone(rawPhone);
-            boolean phoneTaken = userRepository.findAll().stream()
-                    .anyMatch(u -> !u.getId().equals(id) && u.getPhone() != null && normalizeVietnamPhone(u.getPhone()).equals(targetNorm));
+            java.util.List<String> variants = getPhoneVariants(rawPhone);
+            boolean phoneTaken = userRepository.existsByPhoneInAndIdNot(variants, id);
+            if (!phoneTaken) {
+                String targetNorm = normalizeVietnamPhone(rawPhone);
+                java.util.List<User> all = userRepository.findAll();
+                if (all != null && !all.isEmpty()) {
+                    phoneTaken = all.stream()
+                            .anyMatch(u -> !u.getId().equals(id) && u.getPhone() != null && normalizeVietnamPhone(u.getPhone()).equals(targetNorm));
+                }
+            }
             if (phoneTaken) {
                 response.put("status", "ERROR");
                 response.put("message", "Số điện thoại này đã được sử dụng bởi tài khoản khác!");
@@ -107,7 +119,6 @@ public class UserController {
         }
 
         User updatedUser = userRepository.save(user);
-        updatedUser.setPassword(null);
 
         response.put("status", "SUCCESS");
         response.put("message", "Cập nhật thông tin thành công!");
@@ -141,12 +152,60 @@ public class UserController {
         user.setAvatarUrl(request.getAvatarUrl().trim());
 
         User updatedUser = userRepository.save(user);
-        updatedUser.setPassword(null);
 
         response.put("status", "SUCCESS");
         response.put("message", "Cập nhật ảnh đại diện thành công!");
         response.put("user", updatedUser);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Tải file ảnh trực tiếp lên Cloudinary thông qua Cloudinary Java SDK của Spring Boot backend.
+     * Lưu URL trả về vào cơ sở dữ liệu MySQL và trả về thông tin User mới nhất.
+     * POST /api/users/{id}/avatar/upload
+     */
+    @PostMapping(value = "/{id}/avatar/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, Object>> uploadAvatarFile(@PathVariable Long id,
+                                                                @RequestHeader(value = "Authorization", required = false) String authHeader,
+                                                                @RequestParam("file") MultipartFile file) {
+        ResponseEntity<Map<String, Object>> authError = verifyUserAuthorization(id, authHeader);
+        if (authError != null) return authError;
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        Optional<User> userOpt = userRepository.findById(id);
+
+        if (userOpt.isEmpty()) {
+            response.put("status", "ERROR");
+            response.put("message", "Không tìm thấy người dùng!");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+        }
+
+        if (file == null || file.isEmpty()) {
+            response.put("status", "ERROR");
+            response.put("message", "Vui lòng chọn tệp ảnh để tải lên!");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+
+        try {
+            String uploadedUrl = cloudinaryService.uploadImage(file, "artifex/avatars");
+            User user = userOpt.get();
+            user.setAvatarUrl(uploadedUrl);
+            User updatedUser = userRepository.save(user);
+
+            response.put("status", "SUCCESS");
+            response.put("message", "Tải lên và cập nhật ảnh đại diện thành công!");
+            response.put("avatarUrl", uploadedUrl);
+            response.put("user", updatedUser);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            response.put("status", "ERROR");
+            response.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        } catch (Exception e) {
+            response.put("status", "ERROR");
+            response.put("message", "Lỗi upload ảnh lên Cloudinary: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
     }
 
     @PutMapping("/{id}/password")
@@ -168,28 +227,36 @@ public class UserController {
         User user = userOpt.get();
 
         // Kiểm tra chặn nếu là tài khoản đăng nhập qua Google
-        if ("FIREBASE_AUTH".equals(user.getPassword())) {
+        if (PasswordUtils.isFirebaseOnlyAccount(user.getPassword())) {
             response.put("status", "ERROR");
-            response.put("message", "Tài khoản liên kết Google không sử dụng mật khẩu này!");
+            response.put("message", "Tài khoản của bạn đăng nhập bằng Google nên không thể đổi mật khẩu tại đây. Vui lòng tự đổi mật khẩu trên tài khoản Google bên ngoài!");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
-        // Validate dữ liệu đầu vào
-        if (request.getOldPassword() == null || request.getNewPassword() == null ||
-            request.getNewPassword().trim().length() < 6) {
+        // Validate dữ liệu đầu vào (KHÔNG trim mật khẩu để đồng nhất toàn hệ thống)
+        String oldPassword = request.getOldPassword();
+        String newPassword = request.getNewPassword();
+        if (oldPassword == null || oldPassword.isEmpty()) {
             response.put("status", "ERROR");
-            response.put("message", "Mật khẩu mới phải có ít nhất 6 ký tự!");
+            response.put("message", "Vui lòng nhập mật khẩu hiện tại!");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+
+        String passwordError = PasswordUtils.validateRawPassword(newPassword);
+        if (passwordError != null) {
+            response.put("status", "ERROR");
+            response.put("message", passwordError);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
         // Kiểm tra khớp mật khẩu cũ
-        if (!user.getPassword().equals(request.getOldPassword().trim())) {
+        if (!PasswordUtils.matches(oldPassword, user.getPassword())) {
             response.put("status", "ERROR");
             response.put("message", "Mật khẩu hiện tại không chính xác!");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
-        user.setPassword(request.getNewPassword().trim());
+        user.setPassword(PasswordUtils.hash(newPassword));
         userRepository.save(user);
 
         response.put("status", "SUCCESS");
@@ -233,6 +300,17 @@ public class UserController {
             return "0" + e164.substring(3);
         }
         return rawPhone.replaceAll("[^0-9]", "");
+    }
+
+    private java.util.List<String> getPhoneVariants(String phoneInput) {
+        if (phoneInput == null || phoneInput.isBlank()) return java.util.Collections.emptyList();
+        String domestic = toDomesticVietnamPhone(phoneInput);
+        String e164 = normalizeVietnamPhone(phoneInput);
+        String noPlus = e164.startsWith("+") ? e164.substring(1) : e164;
+        return java.util.stream.Stream.of(domestic, e164, noPlus)
+                .filter(p -> p != null && !p.isBlank())
+                .distinct()
+                .toList();
     }
 
     /**

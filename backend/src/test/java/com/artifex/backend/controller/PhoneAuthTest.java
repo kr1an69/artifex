@@ -3,6 +3,7 @@ package com.artifex.backend.controller;
 import com.artifex.backend.dto.AuthDTO.*;
 import com.artifex.backend.entity.User;
 import com.artifex.backend.repository.UserRepository;
+import com.artifex.backend.service.PasswordUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -144,6 +145,50 @@ class PhoneAuthTest {
         var resp2 = controller.requestForgotPasswordOtp(new ForgotPasswordOtpRequest("0912345678"));
         assertEquals(HttpStatus.TOO_MANY_REQUESTS, resp2.getStatusCode());
         assertTrue(resp2.getBody().get("message").toString().contains("Vui lòng đợi"));
+    }
+
+    @Test
+    void passwordIsHashedWithBcryptAndFirebaseLiteralDoesNotLockOutUser() throws Exception {
+        when(repository.findAll()).thenReturn(List.of());
+        when(repository.save(any(User.class))).thenAnswer(invocation -> {
+            User saved = invocation.getArgument(0);
+            saved.setId(99L);
+            return saved;
+        });
+
+        seedOtp("reg:0912345678", "123456");
+        // Người dùng cố tình đặt mật khẩu trùng chuỗi "FIREBASE_AUTH"
+        var regResp = controller.register(new RegisterRequest(
+                "user@gmail.com", "FIREBASE_AUTH", "Test User", "0912345678", null, "123456"));
+        assertEquals(HttpStatus.CREATED, regResp.getStatusCode());
+
+        User savedUser = (User) regResp.getBody().get("user");
+        assertTrue(PasswordUtils.isBcryptHash(savedUser.getPassword()));
+        assertNotEquals("FIREBASE_AUTH", savedUser.getPassword());
+
+        // Tài khoản vẫn đăng nhập và khôi phục mật khẩu bình thường, không bị khóa nhầm thành Google account
+        when(repository.findAll()).thenReturn(List.of(savedUser));
+        assertEquals(HttpStatus.OK,
+                controller.login(new LoginRequest("0912345678", "FIREBASE_AUTH")).getStatusCode());
+        assertEquals(HttpStatus.UNAUTHORIZED,
+                controller.login(new LoginRequest("0912345678", "wrongpass")).getStatusCode());
+        assertEquals(HttpStatus.OK,
+                controller.requestForgotPasswordOtp(new ForgotPasswordOtpRequest("0912345678")).getStatusCode());
+    }
+
+    @Test
+    void anyWhitespaceAnywhereInPasswordIsRejected() throws Exception {
+        when(repository.findAll()).thenReturn(List.of());
+        seedOtp("reg:0987654321", "111222");
+
+        // Mật khẩu chứa khoảng trắng ở đầu, giữa, cuối hoặc toàn khoảng trắng đều bị từ chối
+        for (String badPass : List.of("      ", " pass123", "pass123 ", "pass 123", "pass\t123")) {
+            var resp = controller.register(new RegisterRequest(
+                    "space@gmail.com", badPass, "Space User", "0987654321", null, "111222"));
+            assertEquals(HttpStatus.BAD_REQUEST, resp.getStatusCode());
+            assertTrue(resp.getBody().get("message").toString().contains("khoảng trắng"));
+        }
+        verify(repository, never()).save(any());
     }
 
     @SuppressWarnings("unchecked")

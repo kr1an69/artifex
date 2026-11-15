@@ -25,13 +25,21 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.PickVisualMediaRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.artifex.app.MainActivity;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import com.google.android.material.bottomnavigation.BottomNavigationView;
+import java.util.ArrayList;
 import com.artifex.app.R;
 import com.artifex.app.api.ApiService;
 import com.artifex.app.api.RetrofitClient;
@@ -66,6 +74,7 @@ public class AuthFragment extends Fragment {
     private ImageButton btnChangeAvatar;
     private ImageView btnEditPersonalInfo;
     private TextView tvProfileFullName, tvProfileEmail;
+    private View cardPhoneWarning, btnUpdatePhoneWarning;
 
     // Ô duy nhất hiển thị địa chỉ giao hàng được chọn
     private View cardSelectedAddress, layoutEmptyAddress, btnEmptyAddAddress;
@@ -77,14 +86,16 @@ public class AuthFragment extends Fragment {
     private SharedPrefManager prefManager;
     private FirebaseAuth mAuth;
 
-    private final ActivityResultLauncher<Intent> imagePickerLauncher = registerForActivityResult(
-            new ActivityResultContracts.StartActivityForResult(),
-            result -> {
-                if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
-                    Uri selectedImageUri = result.getData().getData();
-                    if (selectedImageUri != null) {
-                        uploadAvatarToCloudinary(selectedImageUri);
-                    }
+    // Recommendations (Có thể bạn cũng thích - Độc lập trong ui/auth)
+    private RecyclerView rvRecommendations;
+    private ProgressBar progressRecommendations;
+    private RecommendedProductAdapter recommendedProductAdapter;
+
+    private final ActivityResultLauncher<PickVisualMediaRequest> photoPickerLauncher = registerForActivityResult(
+            new ActivityResultContracts.PickVisualMedia(),
+            uri -> {
+                if (uri != null) {
+                    uploadAvatarToCloudinary(uri);
                 }
             }
     );
@@ -142,6 +153,8 @@ public class AuthFragment extends Fragment {
         btnEditPersonalInfo = v.findViewById(R.id.btnEditPersonalInfo);
         tvProfileFullName = v.findViewById(R.id.tvProfileFullName);
         tvProfileEmail = v.findViewById(R.id.tvProfileEmail);
+        cardPhoneWarning = v.findViewById(R.id.cardPhoneWarning);
+        btnUpdatePhoneWarning = v.findViewById(R.id.btnUpdatePhoneWarning);
 
         // Ô duy nhất hiển thị địa chỉ giao hàng
         btnAddNewAddressMain = v.findViewById(R.id.btnAddNewAddressMain);
@@ -154,6 +167,16 @@ public class AuthFragment extends Fragment {
         tvSelectedDefaultBadge = v.findViewById(R.id.tvSelectedDefaultBadge);
         tvSelectedPhone = v.findViewById(R.id.tvSelectedPhone);
         tvSelectedAddressLine = v.findViewById(R.id.tvSelectedAddressLine);
+
+        // Khởi tạo phần Gợi ý "Có thể bạn cũng thích"
+        rvRecommendations = v.findViewById(R.id.rvRecommendations);
+        progressRecommendations = v.findViewById(R.id.progressRecommendations);
+        if (rvRecommendations != null) {
+            rvRecommendations.setLayoutManager(new GridLayoutManager(requireContext(), 2));
+            rvRecommendations.setNestedScrollingEnabled(false);
+            recommendedProductAdapter = new RecommendedProductAdapter(new ArrayList<>(), this::showProductDetailBottomSheet);
+            rvRecommendations.setAdapter(recommendedProductAdapter);
+        }
     }
 
     private void setupEvents() {
@@ -200,10 +223,16 @@ public class AuthFragment extends Fragment {
         btnFirebaseAuth.setOnClickListener(v -> handleFirebaseLogin());
 
         btnChangeAvatar.setOnClickListener(v -> {
-            Intent intent = new Intent(Intent.ACTION_PICK);
-            intent.setType("image/*");
-            imagePickerLauncher.launch(intent);
+            photoPickerLauncher.launch(
+                    new PickVisualMediaRequest.Builder()
+                            .setMediaType(ActivityResultContracts.PickVisualMedia.ImageOnly.INSTANCE)
+                            .build()
+            );
         });
+
+        if (btnUpdatePhoneWarning != null) {
+            btnUpdatePhoneWarning.setOnClickListener(v -> showEditPersonalInfoDialog());
+        }
 
         // Bấm nút sửa thông tin cá nhân ở trên đầu
         if (btnEditPersonalInfo != null) {
@@ -252,11 +281,35 @@ public class AuthFragment extends Fragment {
                 .setMessage("Bạn có chắc chắn muốn đăng xuất khỏi tài khoản hiện tại không?")
                 .setNegativeButton("Hủy", (dialog, which) -> dialog.dismiss())
                 .setPositiveButton("Đăng xuất", (dialog, which) -> {
+                    String token = prefManager.getAuthToken();
+                    if (token != null && !token.trim().isEmpty()) {
+                        String authHeader = "Bearer " + token.trim();
+                        apiService.logout(authHeader).enqueue(new Callback<Map<String, Object>>() {
+                            @Override
+                            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {}
+
+                            @Override
+                            public void onFailure(Call<Map<String, Object>> call, Throwable t) {}
+                        });
+                    }
                     prefManager.clear();
                     mAuth = FirebaseAuthHelper.getFirebaseAuth(requireContext());
                     if (mAuth != null) {
                         mAuth.signOut();
                     }
+                    try {
+                        androidx.credentials.CredentialManager credentialManager = androidx.credentials.CredentialManager.create(requireContext());
+                        androidx.credentials.ClearCredentialStateRequest clearRequest = new androidx.credentials.ClearCredentialStateRequest();
+                        credentialManager.clearCredentialStateAsync(clearRequest, new android.os.CancellationSignal(),
+                                ContextCompat.getMainExecutor(requireContext()),
+                                new androidx.credentials.CredentialManagerCallback<Void, androidx.credentials.exceptions.ClearCredentialException>() {
+                                    @Override
+                                    public void onResult(Void result) {}
+
+                                    @Override
+                                    public void onError(@NonNull androidx.credentials.exceptions.ClearCredentialException e) {}
+                                });
+                    } catch (Exception ignored) {}
                     checkLoginState();
                     Toast.makeText(requireContext(), "Đã đăng xuất!", Toast.LENGTH_SHORT).show();
                 })
@@ -312,6 +365,7 @@ public class AuthFragment extends Fragment {
             layoutProfile.setVisibility(View.VISIBLE);
             bindProfileData();
             fetchLatestUserProfile();
+            loadRecommendationProducts();
         } else {
             layoutAuthForm.setVisibility(View.VISIBLE);
             layoutProfile.setVisibility(View.GONE);
@@ -326,6 +380,12 @@ public class AuthFragment extends Fragment {
             @Override
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                 if (!isAdded()) return;
+                if (response.code() == 401) {
+                    prefManager.clear();
+                    checkLoginState();
+                    Toast.makeText(requireContext(), "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!", Toast.LENGTH_LONG).show();
+                    return;
+                }
                 if (response.isSuccessful() && response.body() != null && response.body().get("user") instanceof Map) {
                     @SuppressWarnings("unchecked")
                     String token = (String) response.body().get("token");
@@ -376,6 +436,12 @@ public class AuthFragment extends Fragment {
     private void bindProfileData() {
         tvProfileFullName.setText(prefManager.getFullName());
         tvProfileEmail.setText(prefManager.getEmail());
+
+        // Hiển thị cảnh báo nếu tài khoản (ví dụ đăng nhập Google) chưa có số điện thoại
+        String phone = prefManager.getPhone();
+        if (cardPhoneWarning != null) {
+            cardPhoneWarning.setVisibility((phone == null || phone.trim().isEmpty()) ? View.VISIBLE : View.GONE);
+        }
 
         // Cập nhật danh sách địa chỉ giao hàng hiển thị trực tiếp
         refreshAddressList();
@@ -478,8 +544,8 @@ public class AuthFragment extends Fragment {
                 return;
             }
 
-            if (newEmail.isEmpty() || !isValidGmail(newEmail)) {
-                Toast.makeText(requireContext(), "Email phải có định dạng @gmail.com!", Toast.LENGTH_SHORT).show();
+            if (!isValidProfileEmail(newEmail, prefManager.getEmail())) {
+                Toast.makeText(requireContext(), "Email không hợp lệ (hỗ trợ @gmail.com hoặc @artifex.vn)!", Toast.LENGTH_SHORT).show();
                 return;
             }
 
@@ -534,10 +600,14 @@ public class AuthFragment extends Fragment {
 
     private void handleLogin() {
         String phone = etPhone.getText() != null ? etPhone.getText().toString().trim() : "";
-        String password = etPassword.getText() != null ? etPassword.getText().toString().trim() : "";
+        String password = etPassword.getText() != null ? etPassword.getText().toString() : "";
 
         if (normalizeLoginPhone(phone).isEmpty() || password.isEmpty()) {
             Toast.makeText(requireContext(), "Vui lòng nhập số điện thoại hợp lệ và mật khẩu", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (containsWhitespace(password)) {
+            Toast.makeText(requireContext(), "Mật khẩu không được chứa khoảng trắng!", Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -586,13 +656,33 @@ public class AuthFragment extends Fragment {
         return trimmed.matches("^[a-zA-Z0-9._%+-]+@gmail\\.com$");
     }
 
+    private boolean isValidProfileEmail(String email, String existingEmail) {
+        if (email == null || email.trim().isEmpty()) return false;
+        String trimmed = email.trim().toLowerCase(Locale.ROOT);
+        if (existingEmail != null && trimmed.equals(existingEmail.trim().toLowerCase(Locale.ROOT))
+                && Patterns.EMAIL_ADDRESS.matcher(trimmed).matches()) {
+            return true;
+        }
+        return trimmed.matches("^[a-zA-Z0-9._%+-]+@(gmail\\.com|artifex\\.vn)$");
+    }
+
+    private boolean containsWhitespace(String text) {
+        if (text == null) return false;
+        for (int i = 0; i < text.length(); i++) {
+            if (Character.isWhitespace(text.charAt(i))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void handleRegister() {
         String fullName = etFullName.getText() != null ? etFullName.getText().toString().trim() : "";
         String email = etEmail.getText() != null ? etEmail.getText().toString().trim().toLowerCase() : "";
         String phone = (etPhone != null && etPhone.getText() != null) ? etPhone.getText().toString().trim() : "";
-        String password = etPassword.getText() != null ? etPassword.getText().toString().trim() : "";
+        String password = etPassword.getText() != null ? etPassword.getText().toString() : "";
         String confirmPassword = (etConfirmPassword != null && etConfirmPassword.getText() != null)
-                ? etConfirmPassword.getText().toString().trim() : "";
+                ? etConfirmPassword.getText().toString() : "";
 
         if (fullName.isEmpty() || email.isEmpty() || phone.isEmpty() || password.isEmpty() || confirmPassword.isEmpty()) {
             Toast.makeText(requireContext(), "Vui lòng nhập đầy đủ tất cả thông tin!", Toast.LENGTH_SHORT).show();
@@ -621,6 +711,11 @@ public class AuthFragment extends Fragment {
             return;
         }
 
+        if (containsWhitespace(password) || containsWhitespace(confirmPassword)) {
+            Toast.makeText(requireContext(), "Mật khẩu không được chứa khoảng trắng!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         if (password.length() < 6) {
             Toast.makeText(requireContext(), "Mật khẩu phải có ít nhất 6 ký tự!", Toast.LENGTH_SHORT).show();
             return;
@@ -642,12 +737,18 @@ public class AuthFragment extends Fragment {
         apiService.sendRegisterOtp(reqBody).enqueue(new Callback<Map<String, Object>>() {
             @Override
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                if (!isAdded()) return;
                 progressBar.setVisibility(View.GONE);
                 btnSubmitAuth.setEnabled(true);
 
                 if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
                     String msg = (String) response.body().get("message");
                     Toast.makeText(requireContext(), msg != null ? msg : "Đã gửi mã xác thực OTP qua tin nhắn SMS!", Toast.LENGTH_LONG).show();
+                    showRegisterOtpDialog(fullName, email, cleanPhone, password);
+                } else if (response.code() == 429) {
+                    // Backend: Mã OTP đã gửi và vẫn còn hạn -> Tự động mở lại Dialog OTP để người dùng nhập mã, không bị kẹt!
+                    String errorMsg = extractErrorMessage(response, "Mã OTP đã được gửi và vẫn còn hiệu lực trong 3 phút.");
+                    Toast.makeText(requireContext(), errorMsg + " Mở lại giao diện xác thực OTP...", Toast.LENGTH_SHORT).show();
                     showRegisterOtpDialog(fullName, email, cleanPhone, password);
                 } else {
                     String errorMsg = extractErrorMessage(response, "Gửi mã OTP thất bại!");
@@ -657,6 +758,7 @@ public class AuthFragment extends Fragment {
 
             @Override
             public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                if (!isAdded()) return;
                 progressBar.setVisibility(View.GONE);
                 btnSubmitAuth.setEnabled(true);
                 Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
@@ -700,12 +802,16 @@ public class AuthFragment extends Fragment {
             etOtp.requestFocus();
         }
 
-        CountDownTimer timer = new CountDownTimer(60000, 1000) {
+        CountDownTimer timer = new CountDownTimer(180000, 1000) {
             @Override
             public void onTick(long millisUntilFinished) {
                 if (tvResendCountdown != null) {
                     tvResendCountdown.setVisibility(View.VISIBLE);
-                    tvResendCountdown.setText("Gửi lại mã sau " + (millisUntilFinished / 1000) + "s");
+                    long totalSec = millisUntilFinished / 1000;
+                    long min = totalSec / 60;
+                    long sec = totalSec % 60;
+                    String timeStr = min > 0 ? String.format(Locale.getDefault(), "%d:%02d", min, sec) : totalSec + "s";
+                    tvResendCountdown.setText("Gửi lại mã sau " + timeStr);
                 }
                 if (btnResendOtp != null) {
                     btnResendOtp.setVisibility(View.GONE);
@@ -892,6 +998,7 @@ public class AuthFragment extends Fragment {
                     String token = (String) response.body().get("token");
                     if (token != null) prefManager.saveAuthToken(token);
                     saveUserDataToPref(userMap);
+                    prefManager.setGoogleAccount(true);
                     checkLoginState();
                     Toast.makeText(requireContext(), "Đăng nhập Google thành công!", Toast.LENGTH_SHORT).show();
                 } else {
@@ -940,10 +1047,72 @@ public class AuthFragment extends Fragment {
         // Các View Bước 2 (KHÔNG hiển thị lộ mã OTP trong form)
         TextView tvOtpDeliveryStatus = dialogView.findViewById(R.id.tvOtpDeliveryStatus);
         TextInputEditText etForgotOtpCode = dialogView.findViewById(R.id.etForgotOtpCode);
+        TextView tvForgotResendCountdown = dialogView.findViewById(R.id.tvForgotResendCountdown);
+        TextView btnForgotResendOtp = dialogView.findViewById(R.id.btnForgotResendOtp);
         TextInputEditText etNewPassword = dialogView.findViewById(R.id.etForgotNewPassword);
         TextInputEditText etConfirmPassword = dialogView.findViewById(R.id.etForgotConfirmPassword);
         Button btnBackToStep1 = dialogView.findViewById(R.id.btnBackToStep1);
         Button btnSubmitForgotPass = dialogView.findViewById(R.id.btnSubmitForgotPass);
+
+        final String[] verifiedPhoneHolder = new String[]{""};
+        final CountDownTimer[] forgotTimerHolder = new CountDownTimer[1];
+        Runnable startForgotCountdown = () -> {
+            if (forgotTimerHolder[0] != null) forgotTimerHolder[0].cancel();
+            forgotTimerHolder[0] = new CountDownTimer(180000, 1000) {
+                @Override
+                public void onTick(long millisUntilFinished) {
+                    if (tvForgotResendCountdown != null) {
+                        tvForgotResendCountdown.setVisibility(View.VISIBLE);
+                        long totalSec = millisUntilFinished / 1000;
+                        long min = totalSec / 60;
+                        long sec = totalSec % 60;
+                        String timeStr = min > 0 ? String.format(Locale.getDefault(), "%d:%02d", min, sec) : totalSec + "s";
+                        tvForgotResendCountdown.setText("Gửi lại mã sau " + timeStr);
+                    }
+                    if (btnForgotResendOtp != null) {
+                        btnForgotResendOtp.setVisibility(View.GONE);
+                    }
+                }
+
+                @Override
+                public void onFinish() {
+                    if (tvForgotResendCountdown != null) {
+                        tvForgotResendCountdown.setVisibility(View.GONE);
+                    }
+                    if (btnForgotResendOtp != null) {
+                        btnForgotResendOtp.setVisibility(View.VISIBLE);
+                    }
+                }
+            }.start();
+        };
+
+        if (btnForgotResendOtp != null) {
+            btnForgotResendOtp.setOnClickListener(v -> {
+                btnForgotResendOtp.setEnabled(false);
+                Map<String, Object> reqBody = new HashMap<>();
+                reqBody.put("phone", verifiedPhoneHolder[0]);
+
+                apiService.requestForgotPasswordOtp(reqBody).enqueue(new Callback<Map<String, Object>>() {
+                    @Override
+                    public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                        btnForgotResendOtp.setEnabled(true);
+                        if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
+                            Toast.makeText(requireContext(), "Đã gửi lại mã OTP mới qua SMS!", Toast.LENGTH_SHORT).show();
+                            startForgotCountdown.run();
+                        } else {
+                            String err = extractErrorMessage(response, "Gửi lại mã thất bại!");
+                            Toast.makeText(requireContext(), err, Toast.LENGTH_SHORT).show();
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                        btnForgotResendOtp.setEnabled(true);
+                        Toast.makeText(requireContext(), "Lỗi mạng: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                });
+            });
+        }
 
         // Tự động điền nếu người dùng đã gõ sẵn tài khoản ở màn hình đăng nhập
         String typedPhone = etPhone.getText() != null ? etPhone.getText().toString().trim() : "";
@@ -951,8 +1120,10 @@ public class AuthFragment extends Fragment {
             etForgotContact.setText(typedPhone);
         }
 
-        final String[] verifiedPhoneHolder = new String[]{""};
 
+        dialog.setOnDismissListener(d -> {
+            if (forgotTimerHolder[0] != null) forgotTimerHolder[0].cancel();
+        });
         btnCancelStep1.setOnClickListener(v -> dialog.dismiss());
 
         // BƯỚC 1: Bấm "Gửi SMS OTP"
@@ -994,7 +1165,23 @@ public class AuthFragment extends Fragment {
                             tvOtpDeliveryStatus.setText("Đã gửi tin nhắn SMS chứa mã OTP (6 chữ số) tới " + maskedContact + ".");
                         }
 
+                        startForgotCountdown.run();
                         Toast.makeText(requireContext(), "Đã gửi tin nhắn SMS OTP tới " + maskedContact + "! Vui lòng kiểm tra tin nhắn trên điện thoại.", Toast.LENGTH_LONG).show();
+                    } else if (response.code() == 429) {
+                        // Mã OTP đã gửi trước đó vẫn còn hạn -> Vẫn cho phép vào Bước 2 để nhập mã, kèm countdown
+                        String resolvedUser = contactInput;
+                        verifiedPhoneHolder[0] = resolvedUser;
+                        layoutStep1.setVisibility(View.GONE);
+                        layoutStep2.setVisibility(View.VISIBLE);
+                        if (tvSubtitle != null) {
+                            tvSubtitle.setText("Bước 2/2: Nhập mã OTP từ tin nhắn SMS và đặt mật khẩu mới cho \"" + resolvedUser + "\"");
+                        }
+                        if (tvOtpDeliveryStatus != null) {
+                            tvOtpDeliveryStatus.setText("Mã OTP đã được gửi tới " + resolvedUser + " và vẫn còn hiệu lực (3 phút).");
+                        }
+                        startForgotCountdown.run();
+                        String errMsg = extractErrorMessage(response, "Mã OTP đã gửi trước đó vẫn còn hiệu lực.");
+                        Toast.makeText(requireContext(), errMsg, Toast.LENGTH_SHORT).show();
                     } else {
                         String errMsg = "Thông tin xác minh không khớp với tài khoản!";
                         if (response.body() != null && response.body().get("message") != null) {
@@ -1015,6 +1202,7 @@ public class AuthFragment extends Fragment {
 
         // Nút "Quay lại" từ Bước 2 về Bước 1
         btnBackToStep1.setOnClickListener(v -> {
+            if (forgotTimerHolder[0] != null) forgotTimerHolder[0].cancel();
             layoutStep2.setVisibility(View.GONE);
             layoutStep1.setVisibility(View.VISIBLE);
             if (tvSubtitle != null) {
@@ -1025,11 +1213,16 @@ public class AuthFragment extends Fragment {
         // BƯỚC 2: Bấm "Đổi mật khẩu"
         btnSubmitForgotPass.setOnClickListener(v -> {
             String otpInput = etForgotOtpCode.getText() != null ? etForgotOtpCode.getText().toString().trim() : "";
-            String newPass = etNewPassword.getText() != null ? etNewPassword.getText().toString().trim() : "";
-            String confirmPass = etConfirmPassword.getText() != null ? etConfirmPassword.getText().toString().trim() : "";
+            String newPass = etNewPassword.getText() != null ? etNewPassword.getText().toString() : "";
+            String confirmPass = etConfirmPassword.getText() != null ? etConfirmPassword.getText().toString() : "";
 
             if (otpInput.length() != 6) {
                 Toast.makeText(requireContext(), "Vui lòng nhập đủ 6 chữ số mã OTP!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (containsWhitespace(newPass)) {
+                Toast.makeText(requireContext(), "Mật khẩu không được chứa khoảng trắng!", Toast.LENGTH_SHORT).show();
                 return;
             }
 
@@ -1058,6 +1251,7 @@ public class AuthFragment extends Fragment {
                     btnSubmitForgotPass.setEnabled(true);
 
                     if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
+                        if (forgotTimerHolder[0] != null) forgotTimerHolder[0].cancel();
                         dialog.dismiss();
                         etPhone.setText(verifiedPhoneHolder[0]);
                         etPassword.setText(newPass);
@@ -1096,6 +1290,40 @@ public class AuthFragment extends Fragment {
 
     private void uploadAvatarToCloudinary(Uri imageUri) {
         progressBar.setVisibility(View.VISIBLE);
+        Long userId = prefManager.getUserId();
+
+        // 1. Thử gửi file ảnh qua API Backend Spring Boot (sử dụng Cloudinary Java SDK của Backend)
+        okhttp3.MultipartBody.Part filePart = CloudinaryHelper.prepareFilePart(requireContext(), imageUri, "file");
+        if (filePart != null) {
+            apiService.uploadAvatarFile(userId, filePart).enqueue(new Callback<Map<String, Object>>() {
+                @Override
+                public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                    if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
+                        progressBar.setVisibility(View.GONE);
+                        String newAvatarUrl = (String) response.body().get("avatarUrl");
+                        if (newAvatarUrl != null) {
+                            prefManager.updateAvatarUrl(newAvatarUrl);
+                            Glide.with(AuthFragment.this).load(newAvatarUrl).circleCrop().into(ivAvatar);
+                        }
+                        Toast.makeText(requireContext(), "Tải ảnh đại diện qua máy chủ Artifex thành công!", Toast.LENGTH_SHORT).show();
+                    } else {
+                        // Nếu backend chưa cấu hình Cloudinary Secret thật hoặc lỗi -> fallback sang client upload
+                        uploadAvatarDirectlyToCloudinary(imageUri);
+                    }
+                }
+
+                @Override
+                public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                    // Nếu lỗi kết nối máy chủ -> tự động fallback sang client upload
+                    uploadAvatarDirectlyToCloudinary(imageUri);
+                }
+            });
+        } else {
+            uploadAvatarDirectlyToCloudinary(imageUri);
+        }
+    }
+
+    private void uploadAvatarDirectlyToCloudinary(Uri imageUri) {
         CloudinaryHelper.uploadImage(requireContext(), imageUri, new CloudinaryHelper.UploadCallback() {
             @Override
             public void onSuccess(String imageUrl) {
@@ -1307,6 +1535,15 @@ public class AuthFragment extends Fragment {
     }
 
     private void showChangePasswordDialog() {
+        if (prefManager.isGoogleAccount()) {
+            new AlertDialog.Builder(requireContext())
+                    .setTitle("Tài khoản liên kết Google")
+                    .setMessage("Tài khoản của bạn đang đăng nhập bằng Google nên không thể đổi mật khẩu trực tiếp trong ứng dụng Artifex.\n\nVui lòng tự thay đổi mật khẩu trực tiếp ở tài khoản Google bên ngoài!")
+                    .setPositiveButton("Đã hiểu", (d, which) -> d.dismiss())
+                    .show();
+            return;
+        }
+
         AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
         View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_change_password, null);
         builder.setView(dialogView);
@@ -1325,12 +1562,17 @@ public class AuthFragment extends Fragment {
         btnCancel.setOnClickListener(v -> dialog.dismiss());
 
         btnSubmit.setOnClickListener(v -> {
-            String oldPass = etOldPassword.getText() != null ? etOldPassword.getText().toString().trim() : "";
-            String newPass = etNewPassword.getText() != null ? etNewPassword.getText().toString().trim() : "";
-            String confirmNewPass = etConfirmNewPassword.getText() != null ? etConfirmNewPassword.getText().toString().trim() : "";
+            String oldPass = etOldPassword.getText() != null ? etOldPassword.getText().toString() : "";
+            String newPass = etNewPassword.getText() != null ? etNewPassword.getText().toString() : "";
+            String confirmNewPass = etConfirmNewPassword.getText() != null ? etConfirmNewPassword.getText().toString() : "";
 
             if (oldPass.isEmpty() || newPass.isEmpty() || confirmNewPass.isEmpty()) {
                 Toast.makeText(requireContext(), "Vui lòng nhập đầy đủ thông tin!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (containsWhitespace(newPass)) {
+                Toast.makeText(requireContext(), "Mật khẩu không được chứa khoảng trắng!", Toast.LENGTH_SHORT).show();
                 return;
             }
 
@@ -1362,7 +1604,8 @@ public class AuthFragment extends Fragment {
                         dialog.dismiss();
                         Toast.makeText(requireContext(), "Đổi mật khẩu thành công!", Toast.LENGTH_SHORT).show();
                     } else if (response.code() == 400) {
-                        Toast.makeText(requireContext(), "Mật khẩu hiện tại không đúng hoặc tài khoản không hỗ trợ!", Toast.LENGTH_SHORT).show();
+                        String errMsg = extractErrorMessage(response, "Mật khẩu hiện tại không đúng hoặc tài khoản không hỗ trợ!");
+                        Toast.makeText(requireContext(), errMsg, Toast.LENGTH_LONG).show();
                     } else {
                         Toast.makeText(requireContext(), "Đổi mật khẩu thất bại (Mã lỗi: " + response.code() + ")!", Toast.LENGTH_SHORT).show();
                     }
@@ -1382,6 +1625,7 @@ public class AuthFragment extends Fragment {
 
     private void saveUserDataToPref(Map<String, Object> user) {
         Long id = user.get("id") != null ? ((Number) user.get("id")).longValue() : 1L;
+        String firebaseUid = (String) user.get("firebaseUid");
         String username = (String) user.get("username");
         String email = (String) user.get("email");
         String fullName = (String) user.get("fullName");
@@ -1391,7 +1635,172 @@ public class AuthFragment extends Fragment {
         String dob = (String) user.get("dateOfBirth");
         String gender = (String) user.get("gender");
 
+        boolean isGoogleAccount = (firebaseUid != null && !firebaseUid.trim().isEmpty())
+                || (username != null && username.startsWith("fb_"));
+
         prefManager.saveUser(id, username, email, fullName, phone, address, avatarUrl);
+        prefManager.setGoogleAccount(isGoogleAccount);
         prefManager.updatePersonalInfo(fullName, email, phone, dob, gender != null ? gender : "Nam");
+    }
+
+    // ==================== RECOMMENDATIONS (ĐỘC LẬP TRONG PACKAGE UI/AUTH) ====================
+
+    private void loadRecommendationProducts() {
+        if (!isAdded() || !prefManager.isLoggedIn()) return;
+
+        if (progressRecommendations != null) {
+            progressRecommendations.setVisibility(View.VISIBLE);
+        }
+
+        apiService.getAuthRecommendedProducts(20).enqueue(new Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(@NonNull Call<Map<String, Object>> call, @NonNull Response<Map<String, Object>> response) {
+                if (!isAdded()) return;
+                if (progressRecommendations != null) progressRecommendations.setVisibility(View.GONE);
+
+                if (response.isSuccessful() && response.body() != null) {
+                    try {
+                        Object dataObj = response.body().get("data");
+                        if (dataObj instanceof Map) {
+                            Object contentObj = ((Map<?, ?>) dataObj).get("content");
+                            if (contentObj instanceof List) {
+                                List<?> rawList = (List<?>) contentObj;
+                                List<RecommendedProduct> parsedList = parseRecommendedProductsFromBackend(rawList);
+                                if (!parsedList.isEmpty() && recommendedProductAdapter != null) {
+                                    recommendedProductAdapter.updateData(parsedList);
+                                }
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+
+            @Override
+            public void onFailure(@NonNull Call<Map<String, Object>> call, @NonNull Throwable t) {
+                if (!isAdded()) return;
+                if (progressRecommendations != null) progressRecommendations.setVisibility(View.GONE);
+            }
+        });
+    }
+
+    private List<RecommendedProduct> parseRecommendedProductsFromBackend(List<?> rawList) {
+        List<RecommendedProduct> result = new ArrayList<>();
+
+        for (int i = 0; i < rawList.size(); i++) {
+            Object item = rawList.get(i);
+            if (item instanceof Map) {
+                Map<?, ?> map = (Map<?, ?>) item;
+                long id = map.get("id") instanceof Number ? ((Number) map.get("id")).longValue() : (i + 1L);
+                String categoryName = map.get("categoryName") != null ? map.get("categoryName").toString() : "";
+                String name = map.get("name") != null ? map.get("name").toString() : "";
+                String description = map.get("description") != null ? map.get("description").toString() : "";
+                long price = map.get("price") instanceof Number ? ((Number) map.get("price")).longValue() : 0L;
+                int stock = map.get("stock") instanceof Number ? ((Number) map.get("stock")).intValue() : 0;
+                double ratingAvg = map.get("ratingAvg") instanceof Number ? ((Number) map.get("ratingAvg")).doubleValue() : 5.0;
+                int reviewCount = map.get("reviewCount") instanceof Number ? ((Number) map.get("reviewCount")).intValue() : 0;
+                String imageUrl = map.get("imageUrl") != null ? map.get("imageUrl").toString() : "";
+
+                result.add(new RecommendedProduct(
+                        id,
+                        categoryName,
+                        name,
+                        description,
+                        price,
+                        stock,
+                        ratingAvg,
+                        reviewCount,
+                        imageUrl
+                ));
+            }
+        }
+        return result;
+    }
+
+    private void showProductDetailBottomSheet(RecommendedProduct product) {
+        if (!isAdded() || product == null) return;
+
+        BottomSheetDialog dialog = new BottomSheetDialog(requireContext());
+        View sheetView = LayoutInflater.from(requireContext()).inflate(R.layout.bottom_sheet_product_preview, null);
+        dialog.setContentView(sheetView);
+
+        ImageView ivPreview = sheetView.findViewById(R.id.ivPreviewImage);
+        TextView tvCategory = sheetView.findViewById(R.id.tvPreviewCategory);
+        TextView tvStock = sheetView.findViewById(R.id.tvPreviewStock);
+        TextView tvName = sheetView.findViewById(R.id.tvPreviewName);
+        TextView tvPrice = sheetView.findViewById(R.id.tvPreviewPrice);
+        TextView tvRatingScore = sheetView.findViewById(R.id.tvPreviewRatingScore);
+        TextView tvReviewCount = sheetView.findViewById(R.id.tvPreviewReviewCount);
+        TextView tvDesc = sheetView.findViewById(R.id.tvPreviewDescription);
+        View btnClose = sheetView.findViewById(R.id.btnClosePreview);
+        View btnViewDetail = sheetView.findViewById(R.id.btnViewDetailPreview);
+        View btnExploreStore = sheetView.findViewById(R.id.btnExploreStorePreview);
+
+        tvName.setText(product.getName());
+
+        DecimalFormatSymbols symbols = new DecimalFormatSymbols(Locale.getDefault());
+        symbols.setGroupingSeparator('.');
+        DecimalFormat formatter = new DecimalFormat("#,### đ", symbols);
+        tvPrice.setText(formatter.format(product.getPrice()));
+
+        tvRatingScore.setText(String.format(Locale.US, "%.1f / 5.0", product.getRatingAvg()));
+        tvReviewCount.setText("(" + product.getReviewCount() + " đánh giá)");
+        tvDesc.setText(!product.getDescription().isEmpty()
+                ? product.getDescription()
+                : "Sản phẩm chính hãng phân phối bởi Artifex PC Gear Store.");
+
+        if (!product.getCategoryName().isEmpty()) {
+            tvCategory.setText(product.getCategoryName().toUpperCase(Locale.ROOT));
+            tvCategory.setVisibility(View.VISIBLE);
+        } else {
+            tvCategory.setVisibility(View.GONE);
+        }
+
+        if (product.getStock() > 0) {
+            tvStock.setText("✓ Còn hàng: " + product.getStock());
+            tvStock.setTextColor(ContextCompat.getColor(requireContext(), R.color.artifex_success));
+        } else {
+            tvStock.setText("✕ Hết hàng");
+            tvStock.setTextColor(ContextCompat.getColor(requireContext(), R.color.artifex_error));
+        }
+
+        Glide.with(this)
+                .load(product.getImageUrl())
+                .placeholder(R.color.artifex_border)
+                .error(R.color.artifex_border)
+                .centerCrop()
+                .into(ivPreview);
+
+        if (btnClose != null) {
+            btnClose.setOnClickListener(v -> dialog.dismiss());
+        }
+
+        if (btnViewDetail != null) {
+            btnViewDetail.setOnClickListener(v -> {
+                dialog.dismiss();
+                Bundle resultBundle = new Bundle();
+                resultBundle.putLong("productId", product.getId());
+                getParentFragmentManager().setFragmentResult("selected_product", resultBundle);
+                if (getActivity() instanceof MainActivity) {
+                    BottomNavigationView nav = getActivity().findViewById(R.id.bottom_navigation);
+                    if (nav != null) {
+                        nav.setSelectedItemId(R.id.nav_detail);
+                    }
+                }
+            });
+        }
+
+        if (btnExploreStore != null) {
+            btnExploreStore.setOnClickListener(v -> {
+                dialog.dismiss();
+                if (getActivity() instanceof MainActivity) {
+                    BottomNavigationView nav = getActivity().findViewById(R.id.bottom_navigation);
+                    if (nav != null) {
+                        nav.setSelectedItemId(R.id.nav_catalog);
+                    }
+                }
+            });
+        }
+
+        dialog.show();
     }
 }
