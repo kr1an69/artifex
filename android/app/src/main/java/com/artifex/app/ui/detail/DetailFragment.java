@@ -176,6 +176,16 @@ public class DetailFragment extends Fragment {
         setupQuantityStepper();
         setupEvents();
 
+        // Lắng nghe sự kiện chuyển sản phẩm từ AuthFragment (màn Lịch sử đơn hàng của Tuấn Anh)
+        getParentFragmentManager().setFragmentResultListener("selected_product", getViewLifecycleOwner(), (requestKey, bundle) -> {
+            long targetProductId = bundle.getLong("productId", -1L);
+            if (targetProductId > 0 && targetProductId != currentProductId) {
+                currentProductId = targetProductId;
+                selectedQuantity = 1;
+                refreshAllData();
+            }
+        });
+
         // Tải toàn bộ thông tin của sản phẩm hiện tại
         refreshAllData();
     }
@@ -265,19 +275,30 @@ public class DetailFragment extends Fragment {
                         if (contentObj instanceof List) {
                             List<?> rawList = (List<?>) contentObj;
                             if (!rawList.isEmpty()) {
-                                long[] ids = new long[rawList.size()];
-                                String[] names = new String[rawList.size()];
+                                List<Long> idList = new ArrayList<>();
+                                List<String> nameList = new ArrayList<>();
                                 for (int i = 0; i < rawList.size(); i++) {
                                     Object item = rawList.get(i);
                                     if (item instanceof Map) {
                                         Map<?, ?> map = (Map<?, ?>) item;
-                                        ids[i] = map.get("id") instanceof Number ? ((Number) map.get("id")).longValue() : (i + 1);
-                                        String n = map.get("name") != null ? map.get("name").toString() : ("SP #" + ids[i]);
-                                        if (n.length() > 22) n = n.substring(0, 22) + "...";
-                                        names[i] = "#" + ids[i] + " " + n;
+                                        long pid = map.get("id") instanceof Number ? ((Number) map.get("id")).longValue() : -1L;
+                                        if (pid > 0) {
+                                            idList.add(pid);
+                                            String n = map.get("name") != null ? map.get("name").toString() : ("SP #" + pid);
+                                            if (n.length() > 22) n = n.substring(0, 22) + "...";
+                                            nameList.add("#" + pid + " " + n);
+                                        }
                                     }
                                 }
-                                populateProductChips(ids, names);
+                                if (!idList.isEmpty()) {
+                                    long[] ids = new long[idList.size()];
+                                    String[] names = new String[nameList.size()];
+                                    for (int i = 0; i < idList.size(); i++) {
+                                        ids[i] = idList.get(i);
+                                        names[i] = nameList.get(i);
+                                    }
+                                    populateProductChips(ids, names);
+                                }
                             }
                         }
                     }
@@ -453,9 +474,12 @@ public class DetailFragment extends Fragment {
      * @param navigateToCart true nếu là bấm Mua Ngay (chuyển sang tab Giỏ hàng)
      */
     private void addCurrentProductToCart(boolean navigateToCart) {
+        if (!isAdded() || getContext() == null) return;
+        final Context appContext = requireContext().getApplicationContext();
+
         new Thread(() -> {
             try {
-                CartDao cartDao = AppDatabase.getInstance(requireContext()).cartDao();
+                CartDao cartDao = AppDatabase.getInstance(appContext).cartDao();
                 List<CartItem> currentItems = cartDao.getAllCartItems();
                 CartItem existing = null;
                 if (currentItems != null) {
@@ -483,7 +507,8 @@ public class DetailFragment extends Fragment {
 
                 if (getActivity() != null) {
                     getActivity().runOnUiThread(() -> {
-                        Toast.makeText(requireContext(), "🛍️ Đã thêm " + selectedQuantity + "x " + currentProductName + " vào giỏ hàng!", Toast.LENGTH_SHORT).show();
+                        if (!isAdded()) return;
+                        Toast.makeText(appContext, "🛍️ Đã thêm " + selectedQuantity + "x " + currentProductName + " vào giỏ hàng!", Toast.LENGTH_SHORT).show();
                         if (navigateToCart && getActivity() instanceof MainActivity) {
                             BottomNavigationView nav = getActivity().findViewById(R.id.bottom_navigation);
                             if (nav != null) {
@@ -494,9 +519,10 @@ public class DetailFragment extends Fragment {
                 }
             } catch (Exception e) {
                 if (getActivity() != null) {
-                    getActivity().runOnUiThread(() ->
-                            Toast.makeText(requireContext(), "Không thể thêm vào giỏ: " + e.getMessage(), Toast.LENGTH_SHORT).show()
-                    );
+                    getActivity().runOnUiThread(() -> {
+                        if (!isAdded()) return;
+                        Toast.makeText(appContext, "Không thể thêm vào giỏ: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    });
                 }
             }
         }).start();
@@ -660,6 +686,26 @@ public class DetailFragment extends Fragment {
      * Hiển thị Dialog viết đánh giá sản phẩm (Gợi ý tag nhanh + Đếm ký tự + Upload Cloudinary)
      */
     private void showWriteReviewDialog() {
+        if (!isAdded() || getContext() == null) return;
+
+        SharedPrefManager sp = SharedPrefManager.getInstance(requireContext());
+        if (!sp.isLoggedIn() || sp.getUserId() == null || sp.getUserId() <= 0) {
+            new MaterialAlertDialogBuilder(requireContext())
+                    .setTitle("Yêu cầu đăng nhập")
+                    .setMessage("Bạn cần đăng nhập tài khoản Artifex để viết đánh giá cho sản phẩm này.")
+                    .setPositiveButton("Đăng nhập ngay", (d, w) -> {
+                        if (getActivity() instanceof MainActivity) {
+                            BottomNavigationView nav = getActivity().findViewById(R.id.bottom_navigation);
+                            if (nav != null) {
+                                nav.setSelectedItemId(R.id.nav_auth);
+                            }
+                        }
+                    })
+                    .setNegativeButton("Để sau", null)
+                    .show();
+            return;
+        }
+
         View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_write_review, null);
 
         TextView tvDialogTitle = dialogView.findViewById(R.id.tvDialogTitle);
@@ -761,15 +807,22 @@ public class DetailFragment extends Fragment {
     private void uploadImageAndCreateReview(AlertDialog dialog, int rating, String comment, Uri imageUri) {
         setDialogLoading(true);
 
-        try {
-            InputStream inputStream = requireContext().getContentResolver().openInputStream(imageUri);
+        if (!isAdded() || getContext() == null) {
+            setDialogLoading(false);
+            return;
+        }
+
+        try (InputStream inputStream = requireContext().getContentResolver().openInputStream(imageUri);
+             ByteArrayOutputStream byteBuffer = new ByteArrayOutputStream()) {
+
             if (inputStream == null) {
                 setDialogLoading(false);
-                Toast.makeText(requireContext(), "Không thể đọc file ảnh đã chọn", Toast.LENGTH_SHORT).show();
+                if (getContext() != null) {
+                    Toast.makeText(getContext(), "Không thể đọc file ảnh đã chọn", Toast.LENGTH_SHORT).show();
+                }
                 return;
             }
 
-            ByteArrayOutputStream byteBuffer = new ByteArrayOutputStream();
             byte[] buffer = new byte[1024];
             int len;
             while ((len = inputStream.read(buffer)) != -1) {
@@ -783,25 +836,29 @@ public class DetailFragment extends Fragment {
             apiService.uploadReviewImage(body).enqueue(new Callback<Map<String, String>>() {
                 @Override
                 public void onResponse(@NonNull Call<Map<String, String>> call, @NonNull Response<Map<String, String>> response) {
+                    if (!isAdded() || getContext() == null) return;
                     if (response.isSuccessful() && response.body() != null && response.body().containsKey("imageUrl")) {
                         String imageUrl = response.body().get("imageUrl");
                         submitReview(dialog, rating, comment, imageUrl);
                     } else {
                         setDialogLoading(false);
-                        Toast.makeText(requireContext(), "Upload ảnh lên Cloudinary thất bại!", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(getContext(), "Upload ảnh lên Cloudinary thất bại!", Toast.LENGTH_SHORT).show();
                     }
                 }
 
                 @Override
                 public void onFailure(@NonNull Call<Map<String, String>> call, @NonNull Throwable t) {
+                    if (!isAdded() || getContext() == null) return;
                     setDialogLoading(false);
-                    Toast.makeText(requireContext(), "Lỗi kết nối upload: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                    Toast.makeText(getContext(), "Lỗi kết nối upload: " + t.getMessage(), Toast.LENGTH_SHORT).show();
                 }
             });
 
         } catch (Exception e) {
             setDialogLoading(false);
-            Toast.makeText(requireContext(), "Lỗi xử lý ảnh: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            if (getContext() != null) {
+                Toast.makeText(getContext(), "Lỗi xử lý ảnh: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            }
         }
     }
 
@@ -809,29 +866,42 @@ public class DetailFragment extends Fragment {
      * Gửi Review qua API Backend (Lấy userId của người đang đăng nhập từ SharedPrefManager)
      */
     private void submitReview(AlertDialog dialog, int rating, String comment, @Nullable String imageUrl) {
+        if (!isAdded() || getContext() == null) return;
+
+        SharedPrefManager sp = SharedPrefManager.getInstance(requireContext());
+        long activeUserId = (sp.getUserId() != null) ? sp.getUserId() : -1L;
+        if (!sp.isLoggedIn() || activeUserId <= 0) {
+            setDialogLoading(false);
+            Toast.makeText(requireContext(), "Vui lòng đăng nhập tài khoản để gửi đánh giá!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         setDialogLoading(true);
 
-        long activeUserId = SharedPrefManager.getInstance(requireContext()).getUserId();
         ReviewRequest request = new ReviewRequest(currentProductId, activeUserId, rating, comment, imageUrl);
 
         apiService.createReview(request).enqueue(new Callback<ReviewResponse>() {
             @Override
             public void onResponse(@NonNull Call<ReviewResponse> call, @NonNull Response<ReviewResponse> response) {
+                if (!isAdded() || getContext() == null) return;
                 setDialogLoading(false);
                 if (response.isSuccessful()) {
-                    Toast.makeText(requireContext(), "🎉 Gửi đánh giá thành công!", Toast.LENGTH_SHORT).show();
-                    dialog.dismiss();
+                    Toast.makeText(getContext(), "🎉 Gửi đánh giá thành công!", Toast.LENGTH_SHORT).show();
+                    if (dialog != null && dialog.isShowing()) {
+                        dialog.dismiss();
+                    }
                     loadRatingSummary();
                     loadReviews();
                 } else {
-                    Toast.makeText(requireContext(), "Không thể gửi đánh giá (Mã lỗi: " + response.code() + ")", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(getContext(), "Không thể gửi đánh giá (Mã lỗi: " + response.code() + ")", Toast.LENGTH_SHORT).show();
                 }
             }
 
             @Override
             public void onFailure(@NonNull Call<ReviewResponse> call, @NonNull Throwable t) {
+                if (!isAdded() || getContext() == null) return;
                 setDialogLoading(false);
-                Toast.makeText(requireContext(), "Lỗi mạng: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), "Lỗi mạng: " + t.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
     }
@@ -842,6 +912,7 @@ public class DetailFragment extends Fragment {
     }
 
     private void showEnlargedImageDialog(String imageUrl) {
+        if (!isAdded() || getContext() == null) return;
         ImageView iv = new ImageView(requireContext());
         iv.setLayoutParams(new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         iv.setAdjustViewBounds(true);

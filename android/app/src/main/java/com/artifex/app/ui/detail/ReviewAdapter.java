@@ -1,6 +1,7 @@
 package com.artifex.app.ui.detail;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -21,9 +22,7 @@ import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.imageview.ShapeableImageView;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Adapter hiển thị danh sách đánh giá sản phẩm (Đức - Bạn 3)
@@ -36,7 +35,7 @@ public class ReviewAdapter extends RecyclerView.Adapter<ReviewAdapter.ReviewView
 
     private final Context context;
     private final List<ReviewResponse> reviewList = new ArrayList<>();
-    private final Set<Long> likedReviews = new HashSet<>();
+    private final SharedPreferences likedPrefs;
     private OnImageClickListener onImageClickListener;
 
     public interface OnImageClickListener {
@@ -45,6 +44,7 @@ public class ReviewAdapter extends RecyclerView.Adapter<ReviewAdapter.ReviewView
 
     public ReviewAdapter(Context context) {
         this.context = context;
+        this.likedPrefs = context.getSharedPreferences("artifex_liked_reviews", Context.MODE_PRIVATE);
     }
 
     public void setOnImageClickListener(OnImageClickListener listener) {
@@ -108,6 +108,8 @@ public class ReviewAdapter extends RecyclerView.Adapter<ReviewAdapter.ReviewView
             holder.cardReviewImage.setVisibility(View.VISIBLE);
             Glide.with(context)
                     .load(imageUrl)
+                    .placeholder(R.drawable.ic_nav_detail)
+                    .error(R.drawable.ic_nav_detail)
                     .centerCrop()
                     .into(holder.imgReview);
 
@@ -118,21 +120,20 @@ public class ReviewAdapter extends RecyclerView.Adapter<ReviewAdapter.ReviewView
             });
         } else {
             holder.cardReviewImage.setVisibility(View.GONE);
+            holder.cardReviewImage.setOnClickListener(null);
         }
 
-        // 7. Tương tác Nút "Hữu ích" (Shopee Style)
+        // 7. Tương tác Nút "Hữu ích" (Shopee Style - lưu trạng thái SharedPreferences)
         final long reviewId = review.getId() != null ? review.getId() : (long) position;
-        boolean isLiked = likedReviews.contains(reviewId);
+        final String prefKey = "liked_review_" + reviewId;
+        boolean isLiked = likedPrefs.getBoolean(prefKey, false);
         updateHelpfulUi(holder, isLiked);
 
         holder.btnHelpful.setOnClickListener(v -> {
-            if (likedReviews.contains(reviewId)) {
-                likedReviews.remove(reviewId);
-                updateHelpfulUi(holder, false);
-            } else {
-                likedReviews.add(reviewId);
-                updateHelpfulUi(holder, true);
-            }
+            boolean current = likedPrefs.getBoolean(prefKey, false);
+            boolean newState = !current;
+            likedPrefs.edit().putBoolean(prefKey, newState).apply();
+            updateHelpfulUi(holder, newState);
         });
     }
 
