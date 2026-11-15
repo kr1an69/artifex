@@ -30,6 +30,12 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.artifex.app.R;
+import com.artifex.app.api.RetrofitClient;
+import com.artifex.app.ui.auth.CloudinaryHelper;
+import com.artifex.app.ui.catalog.model.CatalogApiResponse;
+import com.artifex.app.ui.catalog.model.CategoryResponse;
+import com.artifex.app.ui.catalog.model.PageResponse;
+import com.artifex.app.ui.catalog.model.ProductResponse;
 import com.artifex.app.ui.detail.DetailFragment;
 import com.bumptech.glide.Glide;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
@@ -39,8 +45,14 @@ import com.google.android.material.card.MaterialCardView;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 public class CatalogFragment extends Fragment {
 
@@ -65,6 +77,7 @@ public class CatalogFragment extends Fragment {
     private ProductAdapter productAdapter;
     private List<CategoryItem> categoryList;
     private List<ProductItem> allProducts;
+    private List<ProductItem> displayedProducts;
 
     // --- Filter & Sort State ---
     private String selectedCategoryId = "cat_all";
@@ -73,6 +86,10 @@ public class CatalogFragment extends Fragment {
     private int currentPriceRange = 0; // 0: All, 1: <5M, 2: 5M-15M, 3: 15M-30M, 4: >30M
     private boolean filterInStockOnly = false;
     private boolean filterDiscountOnly = false;
+
+    // --- Debounce Search ---
+    private final Handler searchHandler = new Handler(Looper.getMainLooper());
+    private Runnable searchRunnable;
 
     // --- Cloudinary Image Picker State ---
     private ActivityResultLauncher<String> imagePickerLauncher;
@@ -105,7 +122,7 @@ public class CatalogFragment extends Fragment {
                             activeDialogPlaceholder.setVisibility(View.GONE);
                         }
                         if (activeDialogStatusText != null) {
-                            activeDialogStatusText.setText("Đã chọn ảnh sẵn sàng tải lên Cloudinary");
+                            activeDialogStatusText.setText("Đã chọn ảnh, sẵn sàng đồng bộ Cloudinary");
                         }
                     }
                 }
@@ -139,34 +156,37 @@ public class CatalogFragment extends Fragment {
         layoutEmptyState = view.findViewById(R.id.layout_empty_state);
         btnEmptyReset = view.findViewById(R.id.btn_empty_reset);
 
-        // 2. Khởi tạo dữ liệu linh kiện
-        setupMockData();
+        // 2. Khởi tạo danh sách mặc định & Adapter
+        categoryList = new ArrayList<>();
+        allProducts = new ArrayList<>();
+        displayedProducts = new ArrayList<>();
 
-        // 3. Setup Categories RecyclerView (Horizontal)
+        setupFallbackCategories();
+        setupFallbackProducts();
+
         categoryAdapter = new CategoryAdapter(categoryList, (category, position) -> {
             selectedCategoryId = category.getId();
-            applyFiltersAndSort();
+            loadProductsFromApiOrFilter();
         });
         rvCategories.setLayoutManager(new LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false));
         rvCategories.setAdapter(categoryAdapter);
 
-        // 4. Setup Products RecyclerView (Grid 2 cột)
-        productAdapter = new ProductAdapter(new ArrayList<>(allProducts), this::navigateToProductDetail);
+        productAdapter = new ProductAdapter(new ArrayList<>(displayedProducts), this::navigateToProductDetail);
         rvProducts.setLayoutManager(new GridLayoutManager(requireContext(), 2));
         rvProducts.setAdapter(productAdapter);
 
-        // 5. Setup Search Bar (TextWatcher + Clear Button)
+        // 3. Setup sự kiện tìm kiếm & bộ lọc
         setupSearchEvents();
 
-        // 6. Setup Filter Button, Reset Buttons, Refresh & Cloudinary Add Product
         btnFilter.setOnClickListener(v -> showFilterBottomSheet());
         btnQuickResetFilter.setOnClickListener(v -> resetAllFilters());
         btnEmptyReset.setOnClickListener(v -> resetAllFilters());
         btnRefreshCatalog.setOnClickListener(v -> refreshCatalogData());
         btnAddProductCloudinary.setOnClickListener(v -> showAddProductCloudinaryDialog());
 
-        // 7. Cập nhật danh sách lần đầu
-        applyFiltersAndSort();
+        // 4. Tải dữ liệu thật từ Backend qua Retrofit API
+        fetchCategoriesFromApi();
+        loadProductsFromApiOrFilter();
     }
 
     private void setupSearchEvents() {
@@ -178,7 +198,12 @@ public class CatalogFragment extends Fragment {
             public void onTextChanged(CharSequence s, int start, int before, int count) {
                 currentSearchKeyword = s != null ? s.toString().trim() : "";
                 btnClearSearch.setVisibility(currentSearchKeyword.isEmpty() ? View.GONE : View.VISIBLE);
-                applyFiltersAndSort();
+
+                if (searchRunnable != null) {
+                    searchHandler.removeCallbacks(searchRunnable);
+                }
+                searchRunnable = () -> loadProductsFromApiOrFilter();
+                searchHandler.postDelayed(searchRunnable, 350);
             }
 
             @Override
@@ -187,7 +212,10 @@ public class CatalogFragment extends Fragment {
 
         editSearch.setOnEditorActionListener((v, actionId, event) -> {
             if (actionId == EditorInfo.IME_ACTION_SEARCH) {
-                applyFiltersAndSort();
+                if (searchRunnable != null) {
+                    searchHandler.removeCallbacks(searchRunnable);
+                }
+                loadProductsFromApiOrFilter();
                 return true;
             }
             return false;
@@ -199,17 +227,131 @@ public class CatalogFragment extends Fragment {
         });
     }
 
-    private void applyFiltersAndSort() {
+    // =========================================================================
+    // RETROFIT API: TẢI DANH MỤC TỪ SPRING BOOT BACKEND
+    // =========================================================================
+    private void fetchCategoriesFromApi() {
+        RetrofitClient.getApiService().getCategories().enqueue(new Callback<CatalogApiResponse<List<CategoryResponse>>>() {
+            @Override
+            public void onResponse(@NonNull Call<CatalogApiResponse<List<CategoryResponse>>> call,
+                                   @NonNull Response<CatalogApiResponse<List<CategoryResponse>>> response) {
+                if (!isAdded()) return;
+
+                if (response.isSuccessful() && response.body() != null && response.body().getData() != null) {
+                    List<CategoryResponse> apiCats = response.body().getData();
+                    if (!apiCats.isEmpty()) {
+                        categoryList.clear();
+                        categoryList.add(new CategoryItem("cat_all", "Tất cả"));
+                        for (CategoryResponse cat : apiCats) {
+                            categoryList.add(new CategoryItem(String.valueOf(cat.getId()), cat.getName()));
+                        }
+                        categoryAdapter.notifyDataSetChanged();
+                    }
+                }
+            }
+
+            @Override
+            public void onFailure(@NonNull Call<CatalogApiResponse<List<CategoryResponse>>> call, @NonNull Throwable t) {
+                // Giữ nguyên danh mục fallback nếu backend chưa bật
+            }
+        });
+    }
+
+    // =========================================================================
+    // RETROFIT API: TẢI SẢN PHẨM TỪ SPRING BOOT BACKEND
+    // =========================================================================
+    private void loadProductsFromApiOrFilter() {
+        showLoading(true);
+
+        Long categoryIdParam = null;
+        if (!"cat_all".equals(selectedCategoryId)) {
+            try {
+                categoryIdParam = Long.parseLong(selectedCategoryId.replaceAll("[^0-9]", ""));
+            } catch (NumberFormatException ignored) {}
+        }
+
+        String sortByParam = "createdAt";
+        String directionParam = "DESC";
+        if (currentSortOption == 1) {
+            sortByParam = "price";
+            directionParam = "ASC";
+        } else if (currentSortOption == 2) {
+            sortByParam = "price";
+            directionParam = "DESC";
+        } else if (currentSortOption == 3) {
+            sortByParam = "ratingAvg";
+            directionParam = "DESC";
+        }
+
+        String keywordParam = currentSearchKeyword.isEmpty() ? null : currentSearchKeyword;
+
+        RetrofitClient.getApiService().getProducts(
+                0, 50, sortByParam, directionParam, categoryIdParam, keywordParam
+        ).enqueue(new Callback<CatalogApiResponse<PageResponse<ProductResponse>>>() {
+            @Override
+            public void onResponse(@NonNull Call<CatalogApiResponse<PageResponse<ProductResponse>>> call,
+                                   @NonNull Response<CatalogApiResponse<PageResponse<ProductResponse>>> response) {
+                if (!isAdded()) return;
+                showLoading(false);
+
+                if (response.isSuccessful() && response.body() != null
+                        && response.body().getData() != null
+                        && response.body().getData().getContent() != null) {
+
+                    List<ProductResponse> apiProducts = response.body().getData().getContent();
+                    List<ProductItem> converted = new ArrayList<>();
+
+                    for (ProductResponse pr : apiProducts) {
+                        long priceVal = pr.getPrice() != null ? pr.getPrice().longValue() : 0L;
+                        double ratingVal = pr.getRatingAvg() != null ? pr.getRatingAvg() : 5.0;
+                        int stockVal = pr.getStock() != null ? pr.getStock() : 10;
+                        String catIdStr = pr.getCategoryId() != null ? String.valueOf(pr.getCategoryId()) : "cat_all";
+                        String catNameStr = pr.getCategoryName() != null ? pr.getCategoryName() : "Linh kiện";
+
+                        converted.add(new ProductItem(
+                                String.valueOf(pr.getId()),
+                                catIdStr,
+                                catNameStr,
+                                pr.getName() != null ? pr.getName() : "Linh kiện Artifex",
+                                pr.getDescription() != null && !pr.getDescription().isEmpty()
+                                        ? pr.getDescription() : "Bảo hành chính hãng 36 tháng",
+                                priceVal,
+                                "",
+                                pr.getImageUrl() != null ? pr.getImageUrl() : "",
+                                ratingVal,
+                                stockVal
+                        ));
+                    }
+
+                    allProducts = converted;
+                    filterAndRenderProducts();
+                } else {
+                    // Fallback sang dữ liệu mẫu nếu API trả về rỗng
+                    filterAndRenderProducts();
+                }
+            }
+
+            @Override
+            public void onFailure(@NonNull Call<CatalogApiResponse<PageResponse<ProductResponse>>> call, @NonNull Throwable t) {
+                if (!isAdded()) return;
+                showLoading(false);
+                // Giữ trải nghiệm mượt mà bằng dữ liệu offline nếu chưa khởi động Spring Boot
+                filterAndRenderProducts();
+            }
+        });
+    }
+
+    private void filterAndRenderProducts() {
         List<ProductItem> filtered = new ArrayList<>();
         String keywordLower = currentSearchKeyword.toLowerCase(Locale.ROOT);
 
         for (ProductItem p : allProducts) {
-            // 1. Lọc theo Category
+            // 1. Lọc Category nếu dùng local fallback
             if (!"cat_all".equals(selectedCategoryId) && !selectedCategoryId.equals(p.getCategoryId())) {
                 continue;
             }
 
-            // 2. Lọc theo từ khóa tìm kiếm (Tên, thông số, danh mục)
+            // 2. Lọc Keyword nếu dùng local fallback
             if (!keywordLower.isEmpty()) {
                 boolean matchName = p.getName().toLowerCase(Locale.ROOT).contains(keywordLower);
                 boolean matchSpec = p.getShortSpec().toLowerCase(Locale.ROOT).contains(keywordLower);
@@ -242,9 +384,9 @@ public class CatalogFragment extends Fragment {
             Collections.sort(filtered, (a, b) -> Double.compare(b.getRating(), a.getRating()));
         }
 
-        // 6. Cập nhật UI
-        productAdapter.updateData(filtered);
-        tvResultCount.setText(String.format(Locale.getDefault(), "Hiển thị %d linh kiện", filtered.size()));
+        displayedProducts = filtered;
+        productAdapter.updateData(displayedProducts);
+        tvResultCount.setText(String.format(Locale.getDefault(), "Hiển thị %d linh kiện", displayedProducts.size()));
 
         boolean hasActiveFilter = !"cat_all".equals(selectedCategoryId)
                 || !currentSearchKeyword.isEmpty()
@@ -259,12 +401,21 @@ public class CatalogFragment extends Fragment {
         btnQuickResetFilter.setVisibility(hasActiveFilter ? View.VISIBLE : View.GONE);
         tvActiveFilterInfo.setText(getSortSummaryLabel());
 
-        if (filtered.isEmpty()) {
+        if (displayedProducts.isEmpty()) {
             rvProducts.setVisibility(View.GONE);
             layoutEmptyState.setVisibility(View.VISIBLE);
         } else {
             rvProducts.setVisibility(View.VISIBLE);
             layoutEmptyState.setVisibility(View.GONE);
+        }
+    }
+
+    private void showLoading(boolean show) {
+        if (show) {
+            layoutLoading.setVisibility(View.VISIBLE);
+            layoutEmptyState.setVisibility(View.GONE);
+        } else {
+            layoutLoading.setVisibility(View.GONE);
         }
     }
 
@@ -292,20 +443,13 @@ public class CatalogFragment extends Fragment {
         editSearch.setText("");
         categoryAdapter.setSelectedPosition(0);
         rvCategories.smoothScrollToPosition(0);
-        applyFiltersAndSort();
+        loadProductsFromApiOrFilter();
     }
 
     private void refreshCatalogData() {
-        rvProducts.setVisibility(View.GONE);
-        layoutEmptyState.setVisibility(View.GONE);
-        layoutLoading.setVisibility(View.VISIBLE);
-
-        new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            if (!isAdded()) return;
-            layoutLoading.setVisibility(View.GONE);
-            applyFiltersAndSort();
-            Toast.makeText(requireContext(), "Đã làm mới danh mục linh kiện", Toast.LENGTH_SHORT).show();
-        }, 450);
+        fetchCategoriesFromApi();
+        loadProductsFromApiOrFilter();
+        Toast.makeText(requireContext(), "Đang đồng bộ dữ liệu từ Server...", Toast.LENGTH_SHORT).show();
     }
 
     private void showFilterBottomSheet() {
@@ -322,7 +466,6 @@ public class CatalogFragment extends Fragment {
         MaterialButton btnReset = sheetView.findViewById(R.id.btn_reset_filter);
         MaterialButton btnApply = sheetView.findViewById(R.id.btn_apply_filter);
 
-        // Khôi phục trạng thái hiện tại
         if (currentSortOption == 1) rgSortOrder.check(R.id.rb_sort_price_asc);
         else if (currentSortOption == 2) rgSortOrder.check(R.id.rb_sort_price_desc);
         else if (currentSortOption == 3) rgSortOrder.check(R.id.rb_sort_rating_desc);
@@ -344,7 +487,7 @@ public class CatalogFragment extends Fragment {
             currentPriceRange = 0;
             filterInStockOnly = false;
             filterDiscountOnly = false;
-            applyFiltersAndSort();
+            loadProductsFromApiOrFilter();
             dialog.dismiss();
         });
 
@@ -365,13 +508,16 @@ public class CatalogFragment extends Fragment {
             filterInStockOnly = cbInStockOnly.isChecked();
             filterDiscountOnly = cbDiscountOnly.isChecked();
 
-            applyFiltersAndSort();
+            loadProductsFromApiOrFilter();
             dialog.dismiss();
         });
 
         dialog.show();
     }
 
+    // =========================================================================
+    // DIALOG THÊM SẢN PHẨM & TẢI ẢNH LÊN CLOUDINARY
+    // =========================================================================
     private void showAddProductCloudinaryDialog() {
         selectedImageUri = null;
         AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
@@ -417,30 +563,26 @@ public class CatalogFragment extends Fragment {
                 return;
             }
 
-            String catId = "cat_all".equals(selectedCategoryId) ? "cat_vga" : selectedCategoryId;
-            String catLabel = getCategoryLabelById(catId);
-            String imageUrl = selectedImageUri != null
-                    ? selectedImageUri.toString()
-                    : "https://res.cloudinary.com/demo/image/upload/sample.jpg";
+            btnSave.setEnabled(false);
+            btnSave.setText("Đang xử lý...");
 
-            ProductItem newProduct = new ProductItem(
-                    String.valueOf(allProducts.size() + 1),
-                    catId,
-                    catLabel,
-                    name,
-                    spec.isEmpty() ? "Chính hãng Artifex Bảo hành 36T" : spec,
-                    price,
-                    "MỚI",
-                    imageUrl,
-                    5.0,
-                    10
-            );
+            // Nếu người dùng chọn ảnh từ máy -> Tải lên Cloudinary
+            if (selectedImageUri != null) {
+                CloudinaryHelper.uploadImage(requireContext(), selectedImageUri, new CloudinaryHelper.UploadCallback() {
+                    @Override
+                    public void onSuccess(String imageUrl) {
+                        saveProductToBackendAndList(name, spec, price, imageUrl, dialog);
+                    }
 
-            allProducts.add(0, newProduct);
-            applyFiltersAndSort();
-            rvProducts.smoothScrollToPosition(0);
-            Toast.makeText(requireContext(), "Đã thêm linh kiện & cập nhật ảnh!", Toast.LENGTH_SHORT).show();
-            dialog.dismiss();
+                    @Override
+                    public void onError(String error) {
+                        Toast.makeText(requireContext(), "Lỗi Cloudinary: " + error, Toast.LENGTH_SHORT).show();
+                        saveProductToBackendAndList(name, spec, price, "https://res.cloudinary.com/demo/image/upload/sample.jpg", dialog);
+                    }
+                });
+            } else {
+                saveProductToBackendAndList(name, spec, price, "https://res.cloudinary.com/demo/image/upload/sample.jpg", dialog);
+            }
         });
 
         dialog.setOnDismissListener(d -> {
@@ -450,6 +592,56 @@ public class CatalogFragment extends Fragment {
         });
 
         dialog.show();
+    }
+
+    private void saveProductToBackendAndList(String name, String spec, long price, String imageUrl, AlertDialog dialog) {
+        Long catId = 1L;
+        if (!"cat_all".equals(selectedCategoryId)) {
+            try {
+                catId = Long.parseLong(selectedCategoryId.replaceAll("[^0-9]", ""));
+            } catch (NumberFormatException ignored) {}
+        }
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("name", name);
+        body.put("price", price);
+        body.put("stock", 20);
+        body.put("description", spec.isEmpty() ? "Bảo hành 36 tháng chính hãng" : spec);
+        body.put("imageUrl", imageUrl);
+        body.put("categoryId", catId);
+
+        RetrofitClient.getApiService().createProduct(body).enqueue(new Callback<CatalogApiResponse<ProductResponse>>() {
+            @Override
+            public void onResponse(@NonNull Call<CatalogApiResponse<ProductResponse>> call,
+                                   @NonNull Response<CatalogApiResponse<ProductResponse>> response) {
+                if (!isAdded()) return;
+                dialog.dismiss();
+                Toast.makeText(requireContext(), "Đã thêm linh kiện và lưu vào cơ sở dữ liệu!", Toast.LENGTH_SHORT).show();
+                loadProductsFromApiOrFilter();
+            }
+
+            @Override
+            public void onFailure(@NonNull Call<CatalogApiResponse<ProductResponse>> call, @NonNull Throwable t) {
+                if (!isAdded()) return;
+                dialog.dismiss();
+                // Nếu chưa bật backend -> thêm vào danh sách hiển thị tạm thời
+                ProductItem localNew = new ProductItem(
+                        String.valueOf(allProducts.size() + 1),
+                        "1",
+                        "Linh kiện",
+                        name,
+                        spec,
+                        price,
+                        "MỚI",
+                        imageUrl,
+                        5.0,
+                        20
+                );
+                allProducts.add(0, localNew);
+                filterAndRenderProducts();
+                Toast.makeText(requireContext(), "Đã thêm linh kiện (Chế độ ngoại tuyến)", Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     private void navigateToProductDetail(ProductItem product) {
@@ -473,30 +665,26 @@ public class CatalogFragment extends Fragment {
                 .commit();
     }
 
-    private String getCategoryLabelById(String categoryId) {
-        for (CategoryItem item : categoryList) {
-            if (item.getId().equals(categoryId)) {
-                return item.getName();
-            }
-        }
-        return "Linh kiện";
+    // =========================================================================
+    // DỮ LIỆU DỰ PHÒNG KHI OFFLINE (FALLBACK)
+    // =========================================================================
+    private void setupFallbackCategories() {
+        categoryList.clear();
+        categoryList.add(new CategoryItem("cat_all", "Tất cả"));
+        categoryList.add(new CategoryItem("1", "CPU"));
+        categoryList.add(new CategoryItem("2", "VGA"));
+        categoryList.add(new CategoryItem("3", "Mainboard"));
+        categoryList.add(new CategoryItem("4", "RAM"));
+        categoryList.add(new CategoryItem("5", "Ổ cứng SSD"));
+        categoryList.add(new CategoryItem("6", "Nguồn PSU"));
+        categoryList.add(new CategoryItem("7", "Vỏ Case"));
+        categoryList.add(new CategoryItem("8", "Gaming Gear"));
     }
 
-    private void setupMockData() {
-        categoryList = new ArrayList<>();
-        categoryList.add(new CategoryItem("cat_all", "Tất cả"));
-        categoryList.add(new CategoryItem("cat_cpu", "CPU"));
-        categoryList.add(new CategoryItem("cat_vga", "VGA"));
-        categoryList.add(new CategoryItem("cat_main", "Mainboard"));
-        categoryList.add(new CategoryItem("cat_ram", "RAM"));
-        categoryList.add(new CategoryItem("cat_hdd", "Ổ cứng SSD"));
-        categoryList.add(new CategoryItem("cat_psu", "Nguồn PSU"));
-        categoryList.add(new CategoryItem("cat_case", "Vỏ Case"));
-        categoryList.add(new CategoryItem("cat_gear", "Gaming Gear"));
-
-        allProducts = new ArrayList<>();
+    private void setupFallbackProducts() {
+        allProducts.clear();
         allProducts.add(new ProductItem(
-                "1", "cat_cpu", "CPU",
+                "1", "1", "CPU",
                 "CPU Intel Core i9-14900K",
                 "24 Nhân 32 Luồng, Boost 6.0GHz, LGA1700",
                 14500000L, "-5%",
@@ -504,7 +692,7 @@ public class CatalogFragment extends Fragment {
                 4.9, 15
         ));
         allProducts.add(new ProductItem(
-                "2", "cat_vga", "VGA",
+                "2", "2", "VGA",
                 "VGA ASUS ROG Strix GeForce RTX 4090 OC",
                 "24GB GDDR6X, 384-bit, DLSS 3",
                 55990000L, "-8%",
@@ -512,7 +700,7 @@ public class CatalogFragment extends Fragment {
                 5.0, 5
         ));
         allProducts.add(new ProductItem(
-                "3", "cat_main", "Mainboard",
+                "3", "3", "Mainboard",
                 "Mainboard GIGABYTE Z790 AORUS ELITE AX",
                 "Socket LGA1700, DDR5, PCIe 5.0, Wi-Fi 6E",
                 7200000L, "-10%",
@@ -520,7 +708,7 @@ public class CatalogFragment extends Fragment {
                 4.8, 12
         ));
         allProducts.add(new ProductItem(
-                "4", "cat_ram", "RAM",
+                "4", "4", "RAM",
                 "RAM Corsair Dominator Platinum RGB 32GB",
                 "2x16GB DDR5 Bus 6000MHz, Cas 30",
                 4500000L, "",
@@ -528,7 +716,7 @@ public class CatalogFragment extends Fragment {
                 4.7, 25
         ));
         allProducts.add(new ProductItem(
-                "5", "cat_hdd", "Ổ cứng SSD",
+                "5", "5", "Ổ cứng SSD",
                 "SSD Samsung 990 PRO 2TB NVMe M.2",
                 "PCIe Gen 4x4, Đọc 7450MB/s, Ghi 6900MB/s",
                 4800000L, "-15%",
@@ -536,7 +724,7 @@ public class CatalogFragment extends Fragment {
                 4.9, 30
         ));
         allProducts.add(new ProductItem(
-                "6", "cat_psu", "Nguồn PSU",
+                "6", "6", "Nguồn PSU",
                 "Nguồn Corsair RM1000e ATX 3.0 1000W",
                 "80 Plus Gold, Full Modular, PCIe 5.0",
                 4200000L, "",
@@ -544,7 +732,7 @@ public class CatalogFragment extends Fragment {
                 4.6, 8
         ));
         allProducts.add(new ProductItem(
-                "7", "cat_case", "Vỏ Case",
+                "7", "7", "Vỏ Case",
                 "Case NZXT H9 Flow Dual-Chamber Black",
                 "Mid Tower, Kính cường lực vô cực, 4 Fan",
                 3990000L, "",
@@ -552,7 +740,7 @@ public class CatalogFragment extends Fragment {
                 4.8, 0
         ));
         allProducts.add(new ProductItem(
-                "8", "cat_gear", "Gaming Gear",
+                "8", "8", "Gaming Gear",
                 "Bàn phím cơ Razer BlackWidow V4 Pro",
                 "Green Switch, Chroma RGB, Núm xoay Command",
                 5490000L, "-12%",
