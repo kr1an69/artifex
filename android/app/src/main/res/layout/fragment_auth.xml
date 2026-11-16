@@ -58,7 +58,7 @@
                 android:hint="Họ và tên"
                 android:textColorHint="@color/artifex_text_muted"
                 android:visibility="gone"
-                app:boxBackgroundColor="@color/artifex_surface"
+                app:boxBackgroundColor="@color/artifex_surface_variant"
                 app:boxCornerRadiusBottomEnd="12dp"
                 app:boxCornerRadiusBottomStart="12dp"
                 app:boxCornerRadiusTopEnd="12dp"
@@ -81,7 +81,7 @@
                 android:hint="Địa chỉ Email (@gmail.com)"
                 android:textColorHint="@color/artifex_text_muted"
                 android:visibility="gone"
-                app:boxBackgroundColor="@color/artifex_surface"
+                app:boxBackgroundColor="@color/artifex_surface_variant"
                 app:boxCornerRadiusBottomEnd="12dp"
                 app:boxCornerRadiusBottomStart="12dp"
                 app:boxCornerRadiusTopEnd="12dp"
@@ -104,7 +104,7 @@
                 android:hint="Số điện thoại"
                 android:textColorHint="@color/artifex_text_muted"
                 android:visibility="visible"
-                app:boxBackgroundColor="@color/artifex_surface"
+                app:boxBackgroundColor="@color/artifex_surface_variant"
                 app:boxCornerRadiusBottomEnd="12dp"
                 app:boxCornerRadiusBottomStart="12dp"
                 app:boxCornerRadiusTopEnd="12dp"
@@ -126,7 +126,7 @@
                 android:layout_marginTop="12dp"
                 android:hint="Mật khẩu"
                 android:textColorHint="@color/artifex_text_muted"
-                app:boxBackgroundColor="@color/artifex_surface"
+                app:boxBackgroundColor="@color/artifex_surface_variant"
                 app:boxCornerRadiusBottomEnd="12dp"
                 app:boxCornerRadiusBottomStart="12dp"
                 app:boxCornerRadiusTopEnd="12dp"
@@ -151,7 +151,7 @@
                 android:hint="Xác nhận lại mật khẩu"
                 android:textColorHint="@color/artifex_text_muted"
                 android:visibility="gone"
-                app:boxBackgroundColor="@color/artifex_surface"
+                app:boxBackgroundColor="@color/artifex_surface_variant"
                 app:boxCornerRadiusBottomEnd="12dp"
                 app:boxCornerRadiusBottomStart="12dp"
                 app:boxCornerRadiusTopEnd="12dp"
@@ -254,8 +254,8 @@
                     android:padding="24dp">
 
                     <FrameLayout
-                        android:layout_width="104dp"
-                        android:layout_height="104dp">
+                        android:layout_width="112dp"
+                        android:layout_height="112dp">
 
                         <com.google.android.material.imageview.ShapeableImageView
                             android:id="@+id/ivAvatar"
@@ -269,11 +269,12 @@
 
                         <ImageButton
                             android:id="@+id/btnChangeAvatar"
-                            android:layout_width="32dp"
-                            android:layout_height="32dp"
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
                             android:layout_gravity="bottom|end"
-                            android:background="@drawable/bg_circle_primary"
-                            android:padding="4dp"
+                            android:background="@drawable/bg_circle_primary_inset"
+                            android:contentDescription="Đổi ảnh đại diện"
+                            android:padding="12dp"
                             android:src="@android:drawable/ic_menu_camera"
                             app:tint="@color/artifex_on_primary" />
                     </FrameLayout>
@@ -296,13 +297,13 @@
 
                         <ImageView
                             android:id="@+id/btnEditPersonalInfo"
-                            android:layout_width="32dp"
-                            android:layout_height="32dp"
-                            android:layout_marginStart="8dp"
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
                             android:background="?attr/selectableItemBackgroundBorderless"
                             android:clickable="true"
+                            android:contentDescription="Chỉnh sửa thông tin cá nhân"
                             android:focusable="true"
-                            android:padding="4dp"
+                            android:padding="12dp"
                             android:src="@drawable/ic_edit"
                             app:tint="@color/artifex_primary" />
                     </LinearLayout>

@@ -55,25 +55,17 @@ public class UserController {
     private final com.artifex.backend.service.TokenService tokenService;
     private final com.artifex.backend.service.CloudinaryService cloudinaryService;
 
+    private record AuthorizedUser(User user, ResponseEntity<Map<String, Object>> errorResponse) {}
+
     @GetMapping("/{id}")
     public ResponseEntity<Map<String, Object>> getUserById(@PathVariable Long id,
                                                             @RequestHeader(value = "Authorization", required = false) String authHeader) {
-        ResponseEntity<Map<String, Object>> authError = verifyUserAuthorization(id, authHeader);
-        if (authError != null) return authError;
+        AuthorizedUser auth = authorizeAndLoadUser(id, authHeader);
+        if (auth.errorResponse() != null) return auth.errorResponse();
 
         Map<String, Object> response = new LinkedHashMap<>();
-        Optional<User> userOpt = userRepository.findById(id);
-
-        if (userOpt.isEmpty()) {
-            response.put("status", "ERROR");
-            response.put("message", "Không tìm thấy người dùng!");
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
-        }
-
-        User user = userOpt.get();
-
         response.put("status", "SUCCESS");
-        response.put("user", user);
+        response.put("user", auth.user());
         return ResponseEntity.ok(response);
     }
 
@@ -81,19 +73,11 @@ public class UserController {
     public ResponseEntity<Map<String, Object>> updateProfile(@PathVariable Long id,
                                                             @RequestHeader(value = "Authorization", required = false) String authHeader,
                                                             @RequestBody UpdateProfileRequest request) {
-        ResponseEntity<Map<String, Object>> authError = verifyUserAuthorization(id, authHeader);
-        if (authError != null) return authError;
+        AuthorizedUser auth = authorizeAndLoadUser(id, authHeader);
+        if (auth.errorResponse() != null) return auth.errorResponse();
 
         Map<String, Object> response = new LinkedHashMap<>();
-        Optional<User> userOpt = userRepository.findById(id);
-
-        if (userOpt.isEmpty()) {
-            response.put("status", "ERROR");
-            response.put("message", "Không tìm thấy người dùng!");
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
-        }
-
-        User user = userOpt.get();
+        User user = auth.user();
         boolean isGoogleAccount = PasswordUtils.isFirebaseOnlyAccount(user.getPassword())
                 || (user.getFirebaseUid() != null && !user.getFirebaseUid().isBlank());
 
@@ -225,17 +209,11 @@ public class UserController {
     public ResponseEntity<Map<String, Object>> updateAvatar(@PathVariable Long id,
                                                            @RequestHeader(value = "Authorization", required = false) String authHeader,
                                                            @RequestBody UpdateAvatarRequest request) {
-        ResponseEntity<Map<String, Object>> authError = verifyUserAuthorization(id, authHeader);
-        if (authError != null) return authError;
+        AuthorizedUser auth = authorizeAndLoadUser(id, authHeader);
+        if (auth.errorResponse() != null) return auth.errorResponse();
 
         Map<String, Object> response = new LinkedHashMap<>();
-        Optional<User> userOpt = userRepository.findById(id);
-
-        if (userOpt.isEmpty()) {
-            response.put("status", "ERROR");
-            response.put("message", "Không tìm thấy người dùng!");
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
-        }
+        User user = auth.user();
 
         String avatarUrl = (request != null && request.getAvatarUrl() != null)
                 ? request.getAvatarUrl().trim()
@@ -256,7 +234,6 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
-        User user = userOpt.get();
         user.setAvatarUrl(avatarUrl);
 
         User updatedUser = userRepository.save(user);
@@ -276,17 +253,11 @@ public class UserController {
     public ResponseEntity<Map<String, Object>> uploadAvatarFile(@PathVariable Long id,
                                                                 @RequestHeader(value = "Authorization", required = false) String authHeader,
                                                                 @RequestParam("file") MultipartFile file) {
-        ResponseEntity<Map<String, Object>> authError = verifyUserAuthorization(id, authHeader);
-        if (authError != null) return authError;
+        AuthorizedUser auth = authorizeAndLoadUser(id, authHeader);
+        if (auth.errorResponse() != null) return auth.errorResponse();
 
         Map<String, Object> response = new LinkedHashMap<>();
-        Optional<User> userOpt = userRepository.findById(id);
-
-        if (userOpt.isEmpty()) {
-            response.put("status", "ERROR");
-            response.put("message", "Không tìm thấy người dùng!");
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
-        }
+        User user = auth.user();
 
         if (file == null || file.isEmpty()) {
             response.put("status", "ERROR");
@@ -303,7 +274,6 @@ public class UserController {
 
         try {
             String uploadedUrl = cloudinaryService.uploadImage(file, "artifex/avatars");
-            User user = userOpt.get();
             user.setAvatarUrl(uploadedUrl);
             User updatedUser = userRepository.save(user);
 
@@ -327,19 +297,11 @@ public class UserController {
     public ResponseEntity<Map<String, Object>> changePassword(@PathVariable Long id,
                                                               @RequestHeader(value = "Authorization", required = false) String authHeader,
                                                               @RequestBody ChangePasswordRequest request) {
-        ResponseEntity<Map<String, Object>> authError = verifyUserAuthorization(id, authHeader);
-        if (authError != null) return authError;
+        AuthorizedUser auth = authorizeAndLoadUser(id, authHeader);
+        if (auth.errorResponse() != null) return auth.errorResponse();
 
         Map<String, Object> response = new LinkedHashMap<>();
-        Optional<User> userOpt = userRepository.findById(id);
-
-        if (userOpt.isEmpty()) {
-            response.put("status", "ERROR");
-            response.put("message", "Không tìm thấy người dùng!");
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
-        }
-
-        User user = userOpt.get();
+        User user = auth.user();
 
         // Kiểm tra chặn nếu là tài khoản đăng nhập qua Google
         if (PasswordUtils.isFirebaseOnlyAccount(user.getPassword())) {
@@ -371,33 +333,55 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
+        long revokedAt = System.currentTimeMillis();
         user.setPassword(PasswordUtils.hash(newPassword));
-        userRepository.save(user);
+        user.setTokenValidAfter(revokedAt);
+        User savedUser = userRepository.save(user);
+        Long targetId = savedUser != null && savedUser.getId() != null ? savedUser.getId() : user.getId();
+        String role = savedUser != null ? savedUser.getRole() : user.getRole();
+        tokenService.invalidateUserTokens(targetId, revokedAt);
+        String newToken = tokenService.generateToken(targetId, role);
 
         response.put("status", "SUCCESS");
         response.put("message", "Đổi mật khẩu thành công!");
+        response.put("token", newToken);
         return ResponseEntity.ok(response);
     }
 
     /**
-     * Xác thực quyền sở hữu tài nguyên để chống lỗ hổng IDOR.
-     * Chỉ cho phép chính chủ nhân của tài khoản hoặc tài khoản có role ADMIN thao tác.
+     * Xác thực quyền sở hữu tài nguyên để chống lỗ hổng IDOR và từ chối token đã bị vô hiệu sau khi đổi/reset mật khẩu.
      */
-    private ResponseEntity<Map<String, Object>> verifyUserAuthorization(Long targetUserId, String authHeader) {
+    private AuthorizedUser authorizeAndLoadUser(Long targetUserId, String authHeader) {
         com.artifex.backend.service.TokenService.TokenSession session = tokenService.validateHeader(authHeader);
         if (session == null) {
             Map<String, Object> response = new LinkedHashMap<>();
             response.put("status", "ERROR");
             response.put("message", "Vui lòng đăng nhập để thực hiện thao tác này!");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+            return new AuthorizedUser(null, ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response));
         }
         if (!session.getUserId().equals(targetUserId) && !"ADMIN".equalsIgnoreCase(session.getRole())) {
             Map<String, Object> response = new LinkedHashMap<>();
             response.put("status", "ERROR");
             response.put("message", "Bạn không có quyền thao tác trên tài khoản khác!");
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+            return new AuthorizedUser(null, ResponseEntity.status(HttpStatus.FORBIDDEN).body(response));
         }
-        return null;
+        Optional<User> userOpt = userRepository.findById(targetUserId);
+        if (userOpt.isEmpty()) {
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("status", "ERROR");
+            response.put("message", "Không tìm thấy người dùng!");
+            return new AuthorizedUser(null, ResponseEntity.status(HttpStatus.NOT_FOUND).body(response));
+        }
+        User user = userOpt.get();
+        if (session.getUserId().equals(user.getId())
+                && user.getTokenValidAfter() != null
+                && session.getIssuedAt() <= user.getTokenValidAfter()) {
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("status", "ERROR");
+            response.put("message", "Phiên đăng nhập đã hết hiệu lực do mật khẩu vừa thay đổi. Vui lòng đăng nhập lại!");
+            return new AuthorizedUser(null, ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response));
+        }
+        return new AuthorizedUser(user, null);
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)

@@ -173,6 +173,15 @@
                     android:textSize="14sp" />
             </RadioGroup>
 
+            <!-- Vòng quay loading ngay trong dialog -->
+            <ProgressBar
+                android:id="@+id/progressEditPersonal"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="12dp"
+                android:visibility="gone" />
+
             <!-- Hàng nút hành động: Hủy & Lưu -->
             <LinearLayout
                 android:layout_width="match_parent"

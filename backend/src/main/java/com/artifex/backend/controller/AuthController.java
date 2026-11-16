@@ -40,6 +40,9 @@ public class AuthController {
     @Value("${sms.textbee.api-key:}")
     private String textBeeApiKey;
 
+    @Value("${artifex.otp.log-enabled:false}")
+    private boolean otpLogEnabled = false;
+
     // Lưu mã OTP tạm thời trong bộ nhớ với thời hạn 3 phút (180.000 ms), giới hạn tối đa 5 lần nhập sai
     private static final long OTP_EXPIRATION_MS = 180 * 1000L;
     private static final int MAX_OTP_ATTEMPTS = 5;
@@ -136,12 +139,8 @@ public class AuthController {
         String smsMessage = "[ARTIFEX PC] Ma xac thuc OTP tao tai khoan Artifex cua ban la: " + otpCode + " (Hieu luc 3 phut). Tuyet doi khong chia se ma nay!";
         boolean gatewaySent = sendRealSmsViaGateway(domesticPhone, otpCode, smsMessage);
 
-        System.out.println("==================================================================");
-        System.out.println("[ARTIFEX SMS OTP] YEU CAU MA OTP DANG KY TAI KHOAN MOI");
-        System.out.println("[ARTIFEX SMS OTP] Số điện thoại nhận SMS: " + domesticPhone);
-        System.out.println("[ARTIFEX SMS OTP] MA XAC THUC OTP (3 phut): " + otpCode);
-        System.out.println("[ARTIFEX SMS OTP] Trang thai Gateway (TextBee): " + (gatewaySent ? "DA GUI SMS THAT VE SIM DIEN THOAI" : "GUI SMS THAT BAI / CHUA CAU HINH GATEWAY"));
-        System.out.println("==================================================================");
+        String masked = maskContactInfo(domesticPhone);
+        logOtpDispatch("DANG KY TAI KHOAN MOI", masked, otpCode, gatewaySent);
 
         if (!gatewaySent) {
             otpStorage.remove(storageKey);
@@ -151,7 +150,6 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
         }
 
-        String masked = maskContactInfo(domesticPhone);
         response.put("status", "SUCCESS");
         response.put("gatewaySent", true);
         response.put("message", "Đã gửi mã xác thực OTP tới số " + masked + ". Mã có hiệu lực trong 3 phút.");
@@ -387,14 +385,7 @@ public class AuthController {
         }
 
         String maskedContact = maskContactInfo(!targetPhone.isEmpty() ? targetPhone : contactInput);
-
-        System.out.println("==================================================================");
-        System.out.println("[ARTIFEX SMS OTP] KHOI PHUC MAT KHAU");
-        System.out.println("[ARTIFEX SMS OTP] Tai khoan: " + user.getUsername());
-        System.out.println("[ARTIFEX SMS OTP] So dien thoai nhan SMS that: " + (!targetPhone.isEmpty() ? targetPhone : contactInput));
-        System.out.println("[ARTIFEX SMS OTP] Ma xac thuc OTP (hieu luc 3 phut): " + otpCode);
-        System.out.println("[ARTIFEX SMS OTP] Trang thai SMS Gateway (TextBee): " + (gatewaySent ? "DA GUI SMS THAT VE DIEN THOAI" : "LOI KET NOI GATEWAY"));
-        System.out.println("==================================================================");
+        logOtpDispatch("KHOI PHUC MAT KHAU", maskedContact, otpCode, gatewaySent);
 
         if (!gatewaySent) {
             otpStorage.remove(resetKey);
@@ -467,10 +458,13 @@ public class AuthController {
         }
 
         User user = validation.user();
+        long revokedAt = System.currentTimeMillis();
         user.setPassword(PasswordUtils.hash(newPassword));
+        user.setTokenValidAfter(revokedAt);
         User savedUser = userRepository.save(user);
         otpStorage.remove(validation.storageKey());
 
+        tokenService.invalidateUserTokens(savedUser.getId(), revokedAt);
         String token = tokenService.generateToken(savedUser.getId(), savedUser.getRole());
 
         response.put("status", "SUCCESS");
@@ -550,6 +544,15 @@ public class AuthController {
         if (variants.isEmpty()) return Optional.empty();
         Optional<User> direct = userRepository.findFirstByPhoneIn(variants);
         return direct != null ? direct : Optional.empty();
+    }
+
+    private void logOtpDispatch(String flowName, String maskedPhone, String otpCode, boolean gatewaySent) {
+        System.out.println("[ARTIFEX SMS OTP] " + flowName
+                + " | SDT: " + maskedPhone
+                + " | TextBee: " + (gatewaySent ? "SENT" : "FAILED"));
+        if (otpLogEnabled) {
+            System.out.println("[ARTIFEX SMS OTP DEBUG] OTP (3 phut): " + otpCode);
+        }
     }
 
     private String maskContactInfo(String contact) {

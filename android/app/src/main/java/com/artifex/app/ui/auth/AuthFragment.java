@@ -1,7 +1,6 @@
 package com.artifex.app.ui.auth;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.content.Intent;
 import android.net.Uri;
@@ -29,6 +28,7 @@ import androidx.activity.result.PickVisualMediaRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.GridLayoutManager;
@@ -45,6 +45,7 @@ import com.artifex.app.api.ApiService;
 import com.artifex.app.api.RetrofitClient;
 import com.bumptech.glide.Glide;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 import com.google.firebase.auth.FirebaseAuth;
@@ -82,6 +83,7 @@ public class AuthFragment extends Fragment {
     private TextView tvSelectedReceiverName, tvSelectedTag, tvSelectedDefaultBadge, tvSelectedPhone, tvSelectedAddressLine;
 
     private boolean isRegisterMode = false;
+    private boolean isUploadingAvatar = false;
     private ApiService apiService;
     private SharedPrefManager prefManager;
     private FirebaseAuth mAuth;
@@ -233,6 +235,7 @@ public class AuthFragment extends Fragment {
         btnFirebaseAuth.setOnClickListener(v -> handleFirebaseLogin());
 
         btnChangeAvatar.setOnClickListener(v -> {
+            if (isUploadingAvatar) return;
             photoPickerLauncher.launch(
                     new PickVisualMediaRequest.Builder()
                             .setMediaType(ActivityResultContracts.PickVisualMedia.ImageOnly.INSTANCE)
@@ -286,7 +289,7 @@ public class AuthFragment extends Fragment {
     }
 
     private void showConfirmLogoutDialog() {
-        new AlertDialog.Builder(requireContext())
+        new MaterialAlertDialogBuilder(requireContext())
                 .setTitle("Xác nhận đăng xuất")
                 .setMessage("Bạn có chắc chắn muốn đăng xuất khỏi tài khoản hiện tại không?")
                 .setNegativeButton("Hủy", (dialog, which) -> dialog.dismiss())
@@ -376,12 +379,7 @@ public class AuthFragment extends Fragment {
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                 if (!isAdded()) return;
                 if (response.code() == 401) {
-                    prefManager.clear();
-                    signOutFirebaseClient(false);
-                    clearAuthFormInputs();
-                    resetAvatarPlaceholder();
-                    checkLoginState();
-                    Toast.makeText(requireContext(), "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!", Toast.LENGTH_LONG).show();
+                    handleUnauthorizedSession();
                     return;
                 }
                 if (response.isSuccessful() && applyAuthSessionFromResponse(response.body(), false)) {
@@ -456,7 +454,7 @@ public class AuthFragment extends Fragment {
 
     // ================= CHỈNH SỬA THÔNG TIN CÁ NHÂN (HỌ TÊN, EMAIL, SĐT CÁ NHÂN, NGÀY SINH, GIỚI TÍNH) =================
     private void showEditPersonalInfoDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(requireContext());
         View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_edit_personal_info, null);
         builder.setView(dialogView);
 
@@ -474,6 +472,7 @@ public class AuthFragment extends Fragment {
         RadioButton rbGenderMale = dialogView.findViewById(R.id.rbGenderMale);
         RadioButton rbGenderFemale = dialogView.findViewById(R.id.rbGenderFemale);
         RadioButton rbGenderOther = dialogView.findViewById(R.id.rbGenderOther);
+        ProgressBar dialogProgress = dialogView.findViewById(R.id.progressEditPersonal);
         Button btnCancel = dialogView.findViewById(R.id.btnCancelEditPersonal);
         Button btnSave = dialogView.findViewById(R.id.btnSaveEditPersonal);
 
@@ -579,8 +578,10 @@ public class AuthFragment extends Fragment {
                 return;
             }
 
-            progressBar.setVisibility(View.VISIBLE);
+            if (dialogProgress != null) dialogProgress.setVisibility(View.VISIBLE);
             btnSave.setEnabled(false);
+            btnSave.setText("Đang lưu...");
+            btnCancel.setEnabled(false);
 
             // Đồng bộ lên MySQL backend
             Map<String, Object> body = new HashMap<>();
@@ -596,10 +597,17 @@ public class AuthFragment extends Fragment {
             apiService.updateProfile(userId, body).enqueue(new Callback<Map<String, Object>>() {
                 @Override
                 public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
-                    if (!isAdded()) return;
-                    progressBar.setVisibility(View.GONE);
+                    if (!isAdded() || !dialog.isShowing()) return;
+                    if (dialogProgress != null) dialogProgress.setVisibility(View.GONE);
                     btnSave.setEnabled(true);
+                    btnSave.setText("Lưu thay đổi");
+                    btnCancel.setEnabled(true);
 
+                    if (response.code() == 401) {
+                        dialog.dismiss();
+                        handleUnauthorizedSession();
+                        return;
+                    }
                     if (response.isSuccessful()) {
                         if (!applyAuthSessionFromResponse(response.body(), isGoogleAccount)) {
                             prefManager.updatePersonalInfo(newFullName, newEmail, cleanPhone, newDob, finalGender);
@@ -615,9 +623,11 @@ public class AuthFragment extends Fragment {
 
                 @Override
                 public void onFailure(Call<Map<String, Object>> call, Throwable t) {
-                    if (!isAdded()) return;
-                    progressBar.setVisibility(View.GONE);
+                    if (!isAdded() || !dialog.isShowing()) return;
+                    if (dialogProgress != null) dialogProgress.setVisibility(View.GONE);
                     btnSave.setEnabled(true);
+                    btnSave.setText("Lưu thay đổi");
+                    btnCancel.setEnabled(true);
                     Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
                 }
             });
@@ -829,7 +839,7 @@ public class AuthFragment extends Fragment {
             registerOtpDialog.dismiss();
         }
 
-        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(requireContext());
         View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_register_otp, null);
         builder.setView(dialogView);
         builder.setCancelable(false);
@@ -850,6 +860,7 @@ public class AuthFragment extends Fragment {
         EditText etOtp = dialogView.findViewById(R.id.etRegisterOtp);
         TextView tvResendCountdown = dialogView.findViewById(R.id.tvRegisterResendCountdown);
         TextView btnResendOtp = dialogView.findViewById(R.id.btnRegisterResendOtp);
+        ProgressBar dialogProgress = dialogView.findViewById(R.id.progressRegisterOtp);
         Button btnConfirm = dialogView.findViewById(R.id.btnConfirmRegisterOtp);
         Button btnCancel = dialogView.findViewById(R.id.btnCancelRegisterOtp);
 
@@ -879,6 +890,7 @@ public class AuthFragment extends Fragment {
         if (btnResendOtp != null) {
             btnResendOtp.setOnClickListener(v -> {
                 btnResendOtp.setEnabled(false);
+                if (dialogProgress != null) dialogProgress.setVisibility(View.VISIBLE);
                 Map<String, Object> reqBody = new HashMap<>();
                 reqBody.put("phone", phone);
                 reqBody.put("email", email);
@@ -887,6 +899,7 @@ public class AuthFragment extends Fragment {
                     @Override
                     public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                         if (!isAdded() || !dialog.isShowing()) return;
+                        if (dialogProgress != null) dialogProgress.setVisibility(View.GONE);
                         btnResendOtp.setEnabled(true);
                         if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
                             Toast.makeText(requireContext(), "Đã gửi lại mã OTP mới qua SMS!", Toast.LENGTH_SHORT).show();
@@ -900,6 +913,7 @@ public class AuthFragment extends Fragment {
                     @Override
                     public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                         if (!isAdded() || !dialog.isShowing()) return;
+                        if (dialogProgress != null) dialogProgress.setVisibility(View.GONE);
                         btnResendOtp.setEnabled(true);
                         Toast.makeText(requireContext(), "Lỗi mạng: " + t.getMessage(), Toast.LENGTH_SHORT).show();
                     }
@@ -914,8 +928,10 @@ public class AuthFragment extends Fragment {
                 return;
             }
 
+            if (dialogProgress != null) dialogProgress.setVisibility(View.VISIBLE);
             btnConfirm.setEnabled(false);
             btnConfirm.setText("Đang xác thực...");
+            btnCancel.setEnabled(false);
 
             Map<String, Object> regBody = new HashMap<>();
             regBody.put("fullName", fullName);
@@ -928,8 +944,10 @@ public class AuthFragment extends Fragment {
                 @Override
                 public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                     if (!isAdded() || !dialog.isShowing()) return;
+                    if (dialogProgress != null) dialogProgress.setVisibility(View.GONE);
                     btnConfirm.setEnabled(true);
                     btnConfirm.setText("Xác nhận & Tạo tài khoản");
+                    btnCancel.setEnabled(true);
 
                     if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
                         if (!applyAuthSessionFromResponse(response.body(), false)) {
@@ -950,8 +968,10 @@ public class AuthFragment extends Fragment {
                 @Override
                 public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                     if (!isAdded() || !dialog.isShowing()) return;
+                    if (dialogProgress != null) dialogProgress.setVisibility(View.GONE);
                     btnConfirm.setEnabled(true);
                     btnConfirm.setText("Xác nhận & Tạo tài khoản");
+                    btnCancel.setEnabled(true);
                     Toast.makeText(requireContext(), "Lỗi kết nối: " + t.getMessage(), Toast.LENGTH_SHORT).show();
                 }
             });
@@ -1087,9 +1107,10 @@ public class AuthFragment extends Fragment {
             forgotPasswordDialog.dismiss();
         }
 
-        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(requireContext());
         View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_forgot_password, null);
         builder.setView(dialogView);
+        builder.setCancelable(false);
 
         AlertDialog dialog = builder.create();
         forgotPasswordDialog = dialog;
@@ -1098,6 +1119,7 @@ public class AuthFragment extends Fragment {
         }
 
         TextView tvSubtitle = dialogView.findViewById(R.id.tvForgotSubtitle);
+        ProgressBar dialogProgress = dialogView.findViewById(R.id.progressForgotPassword);
         LinearLayout layoutStep1 = dialogView.findViewById(R.id.layoutForgotStep1);
         LinearLayout layoutStep2 = dialogView.findViewById(R.id.layoutForgotStep2);
         LinearLayout layoutStep3 = dialogView.findViewById(R.id.layoutForgotStep3);
@@ -1149,6 +1171,7 @@ public class AuthFragment extends Fragment {
         if (btnForgotResendOtp != null) {
             btnForgotResendOtp.setOnClickListener(v -> {
                 btnForgotResendOtp.setEnabled(false);
+                if (dialogProgress != null) dialogProgress.setVisibility(View.VISIBLE);
                 Map<String, Object> reqBody = new HashMap<>();
                 reqBody.put("phone", verifiedPhoneHolder[0]);
 
@@ -1156,6 +1179,7 @@ public class AuthFragment extends Fragment {
                     @Override
                     public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                         if (!isAdded() || !dialog.isShowing()) return;
+                        if (dialogProgress != null) dialogProgress.setVisibility(View.GONE);
                         btnForgotResendOtp.setEnabled(true);
                         if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
                             verifiedOtpHolder[0] = "";
@@ -1171,6 +1195,7 @@ public class AuthFragment extends Fragment {
                     @Override
                     public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                         if (!isAdded() || !dialog.isShowing()) return;
+                        if (dialogProgress != null) dialogProgress.setVisibility(View.GONE);
                         btnForgotResendOtp.setEnabled(true);
                         Toast.makeText(requireContext(), "Lỗi mạng: " + t.getMessage(), Toast.LENGTH_SHORT).show();
                     }
@@ -1202,8 +1227,10 @@ public class AuthFragment extends Fragment {
                 return;
             }
 
-            progressBar.setVisibility(View.VISIBLE);
+            if (dialogProgress != null) dialogProgress.setVisibility(View.VISIBLE);
             btnRequestOtp.setEnabled(false);
+            btnRequestOtp.setText("Đang gửi...");
+            btnCancelStep1.setEnabled(false);
 
             Map<String, Object> body = new HashMap<>();
             body.put("phone", contactInput);
@@ -1212,8 +1239,10 @@ public class AuthFragment extends Fragment {
                 @Override
                 public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                     if (!isAdded() || !dialog.isShowing()) return;
-                    progressBar.setVisibility(View.GONE);
+                    if (dialogProgress != null) dialogProgress.setVisibility(View.GONE);
                     btnRequestOtp.setEnabled(true);
+                    btnRequestOtp.setText("Gửi SMS OTP");
+                    btnCancelStep1.setEnabled(true);
 
                     if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
                         if (Boolean.FALSE.equals(response.body().get("gatewaySent"))) {
@@ -1266,8 +1295,10 @@ public class AuthFragment extends Fragment {
                 @Override
                 public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                     if (!isAdded() || !dialog.isShowing()) return;
-                    progressBar.setVisibility(View.GONE);
+                    if (dialogProgress != null) dialogProgress.setVisibility(View.GONE);
                     btnRequestOtp.setEnabled(true);
+                    btnRequestOtp.setText("Gửi SMS OTP");
+                    btnCancelStep1.setEnabled(true);
                     Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
                 }
             });
@@ -1288,8 +1319,10 @@ public class AuthFragment extends Fragment {
                 return;
             }
 
-            progressBar.setVisibility(View.VISIBLE);
+            if (dialogProgress != null) dialogProgress.setVisibility(View.VISIBLE);
             btnVerifyForgotOtp.setEnabled(false);
+            btnVerifyForgotOtp.setText("Đang xác thực...");
+            btnBackToStep1.setEnabled(false);
 
             Map<String, Object> body = new HashMap<>();
             body.put("phone", verifiedPhoneHolder[0]);
@@ -1299,8 +1332,10 @@ public class AuthFragment extends Fragment {
                 @Override
                 public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                     if (!isAdded() || !dialog.isShowing()) return;
-                    progressBar.setVisibility(View.GONE);
+                    if (dialogProgress != null) dialogProgress.setVisibility(View.GONE);
                     btnVerifyForgotOtp.setEnabled(true);
+                    btnVerifyForgotOtp.setText("Tiếp tục");
+                    btnBackToStep1.setEnabled(true);
 
                     if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
                         verifiedOtpHolder[0] = otpInput;
@@ -1316,8 +1351,10 @@ public class AuthFragment extends Fragment {
                 @Override
                 public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                     if (!isAdded() || !dialog.isShowing()) return;
-                    progressBar.setVisibility(View.GONE);
+                    if (dialogProgress != null) dialogProgress.setVisibility(View.GONE);
                     btnVerifyForgotOtp.setEnabled(true);
+                    btnVerifyForgotOtp.setText("Tiếp tục");
+                    btnBackToStep1.setEnabled(true);
                     Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
                 }
             });
@@ -1360,8 +1397,10 @@ public class AuthFragment extends Fragment {
                 return;
             }
 
-            progressBar.setVisibility(View.VISIBLE);
+            if (dialogProgress != null) dialogProgress.setVisibility(View.VISIBLE);
             btnSubmitForgotPass.setEnabled(false);
+            btnSubmitForgotPass.setText("Đang xử lý...");
+            btnBackToStep2.setEnabled(false);
 
             Map<String, Object> body = new HashMap<>();
             body.put("phone", verifiedPhoneHolder[0]);
@@ -1372,8 +1411,10 @@ public class AuthFragment extends Fragment {
                 @Override
                 public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                     if (!isAdded() || !dialog.isShowing()) return;
-                    progressBar.setVisibility(View.GONE);
+                    if (dialogProgress != null) dialogProgress.setVisibility(View.GONE);
                     btnSubmitForgotPass.setEnabled(true);
+                    btnSubmitForgotPass.setText("Đổi mật khẩu");
+                    btnBackToStep2.setEnabled(true);
 
                     if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
                         cancelForgotOtpTimer();
@@ -1403,8 +1444,10 @@ public class AuthFragment extends Fragment {
                 @Override
                 public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                     if (!isAdded() || !dialog.isShowing()) return;
-                    progressBar.setVisibility(View.GONE);
+                    if (dialogProgress != null) dialogProgress.setVisibility(View.GONE);
                     btnSubmitForgotPass.setEnabled(true);
+                    btnSubmitForgotPass.setText("Đổi mật khẩu");
+                    btnBackToStep2.setEnabled(true);
                     Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
                 }
             });
@@ -1418,14 +1461,34 @@ public class AuthFragment extends Fragment {
         return phone.substring(0, 3) + "***" + phone.substring(phone.length() - 3);
     }
 
+    private void setAvatarUploadState(boolean uploading) {
+        isUploadingAvatar = uploading;
+        if (progressBar != null) {
+            progressBar.setVisibility(uploading ? View.VISIBLE : View.GONE);
+        }
+        if (btnChangeAvatar != null) {
+            btnChangeAvatar.setEnabled(!uploading);
+            btnChangeAvatar.setAlpha(uploading ? 0.5f : 1f);
+        }
+    }
+
+    private void handleUnauthorizedSession() {
+        prefManager.clear();
+        signOutFirebaseClient(false);
+        clearAuthFormInputs();
+        resetAvatarPlaceholder();
+        checkLoginState();
+        Toast.makeText(requireContext(), "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!", Toast.LENGTH_LONG).show();
+    }
+
     private void uploadAvatarToCloudinary(Uri imageUri) {
-        if (!isAdded() || getView() == null) return;
+        if (!isAdded() || getView() == null || isUploadingAvatar) return;
         Long userId = prefManager.getUserId();
         if (userId == null || userId <= 0) {
             Toast.makeText(requireContext(), "Phiên đăng nhập không hợp lệ, vui lòng đăng nhập lại!", Toast.LENGTH_SHORT).show();
             return;
         }
-        progressBar.setVisibility(View.VISIBLE);
+        setAvatarUploadState(true);
         android.content.Context appContext = requireContext().getApplicationContext();
         android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
 
@@ -1433,9 +1496,12 @@ public class AuthFragment extends Fragment {
         new Thread(() -> {
             okhttp3.MultipartBody.Part filePart = CloudinaryHelper.prepareFilePart(appContext, imageUri, "file");
             mainHandler.post(() -> {
-                if (!isAdded() || getView() == null) return;
+                if (!isAdded() || getView() == null) {
+                    isUploadingAvatar = false;
+                    return;
+                }
                 if (filePart == null) {
-                    progressBar.setVisibility(View.GONE);
+                    setAvatarUploadState(false);
                     Toast.makeText(requireContext(), "Tệp ảnh không hợp lệ hoặc không thể đọc ảnh!", Toast.LENGTH_SHORT).show();
                     return;
                 }
@@ -1443,8 +1509,15 @@ public class AuthFragment extends Fragment {
                 apiService.uploadAvatarFile(userId, filePart).enqueue(new Callback<Map<String, Object>>() {
                     @Override
                     public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
-                        if (!isAdded() || getView() == null) return;
-                        progressBar.setVisibility(View.GONE);
+                        if (!isAdded() || getView() == null) {
+                            isUploadingAvatar = false;
+                            return;
+                        }
+                        setAvatarUploadState(false);
+                        if (response.code() == 401) {
+                            handleUnauthorizedSession();
+                            return;
+                        }
                         if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
                             String newAvatarUrl = (String) response.body().get("avatarUrl");
                             if (newAvatarUrl != null && !newAvatarUrl.trim().isEmpty()) {
@@ -1466,8 +1539,11 @@ public class AuthFragment extends Fragment {
 
                     @Override
                     public void onFailure(Call<Map<String, Object>> call, Throwable t) {
-                        if (!isAdded() || getView() == null) return;
-                        progressBar.setVisibility(View.GONE);
+                        if (!isAdded() || getView() == null) {
+                            isUploadingAvatar = false;
+                            return;
+                        }
+                        setAvatarUploadState(false);
                         Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
                     }
                 });
@@ -1517,7 +1593,7 @@ public class AuthFragment extends Fragment {
     }
 
     private void showConfirmDeleteAddressDialog(UserAddress address, AddressAdapter adapter, List<UserAddress> addressList) {
-        new AlertDialog.Builder(requireContext())
+        new MaterialAlertDialogBuilder(requireContext())
                 .setTitle("Xác nhận xóa địa chỉ")
                 .setMessage("Bạn có chắc chắn muốn xóa địa chỉ nhận hàng của \"" + address.getReceiverName() + "\" không?")
                 .setNegativeButton("Hủy", (dialog, which) -> dialog.dismiss())
@@ -1544,9 +1620,26 @@ public class AuthFragment extends Fragment {
         body.put("address", addressLine != null ? addressLine : "");
         apiService.updateProfile(userId, body).enqueue(new Callback<Map<String, Object>>() {
             @Override
-            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {}
+            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                if (!isAdded()) return;
+                if (response.code() == 401) {
+                    handleUnauthorizedSession();
+                    return;
+                }
+                if (response.isSuccessful()) {
+                    applyAuthSessionFromResponse(response.body(), prefManager.isGoogleAccount());
+                    refreshAddressList();
+                } else {
+                    String errMsg = extractErrorMessage(response, "Không thể đồng bộ địa chỉ lên máy chủ!");
+                    Toast.makeText(requireContext(), errMsg, Toast.LENGTH_SHORT).show();
+                }
+            }
+
             @Override
-            public void onFailure(Call<Map<String, Object>> call, Throwable t) {}
+            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                if (!isAdded()) return;
+                Toast.makeText(requireContext(), "Đã lưu địa chỉ trên máy, nhưng chưa đồng bộ được lên máy chủ.", Toast.LENGTH_SHORT).show();
+            }
         });
     }
 
@@ -1560,7 +1653,7 @@ public class AuthFragment extends Fragment {
             List<UserAddress> addressList,
             @Nullable UserAddress editingAddress) {
 
-        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(requireContext());
         View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_add_address, null);
         builder.setView(dialogView);
 
@@ -1617,16 +1710,26 @@ public class AuthFragment extends Fragment {
                 Toast.makeText(requireContext(), "Vui lòng nhập đầy đủ thông tin!", Toast.LENGTH_SHORT).show();
                 return;
             }
+            if (address.length() > 255) {
+                Toast.makeText(requireContext(), "Địa chỉ không được vượt quá 255 ký tự!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            String normalizedPhone = normalizeLoginPhone(phone);
+            if (normalizedPhone.isEmpty()) {
+                Toast.makeText(requireContext(), "Số điện thoại người nhận không hợp lệ! Vui lòng nhập đúng 10 số (ví dụ: 09xxxxxxxx).", Toast.LENGTH_SHORT).show();
+                etPhone.requestFocus();
+                return;
+            }
 
             if (isEditMode) {
                 editingAddress.setReceiverName(name);
-                editingAddress.setPhone(phone);
+                editingAddress.setPhone(normalizedPhone);
                 editingAddress.setAddressLine(address);
                 editingAddress.setTag(tag);
                 editingAddress.setDefault(isDefault);
                 prefManager.updateAddress(editingAddress);
             } else {
-                UserAddress newAddr = new UserAddress(name, phone, address, tag, isDefault);
+                UserAddress newAddr = new UserAddress(name, normalizedPhone, address, tag, isDefault);
                 prefManager.addAddress(newAddr);
             }
 
@@ -1655,7 +1758,7 @@ public class AuthFragment extends Fragment {
 
     private void showChangePasswordDialog() {
         if (prefManager.isGoogleAccount()) {
-            new AlertDialog.Builder(requireContext())
+            new MaterialAlertDialogBuilder(requireContext())
                     .setTitle("Tài khoản liên kết Google")
                     .setMessage("Tài khoản của bạn đang đăng nhập bằng Google nên không thể đổi mật khẩu trực tiếp trong ứng dụng Artifex.\n\nVui lòng tự thay đổi mật khẩu trực tiếp ở tài khoản Google bên ngoài!")
                     .setPositiveButton("Đã hiểu", (d, which) -> d.dismiss())
@@ -1663,7 +1766,7 @@ public class AuthFragment extends Fragment {
             return;
         }
 
-        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(requireContext());
         View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_change_password, null);
         builder.setView(dialogView);
 
@@ -1675,6 +1778,7 @@ public class AuthFragment extends Fragment {
         TextInputEditText etOldPassword = dialogView.findViewById(R.id.etOldPassword);
         TextInputEditText etNewPassword = dialogView.findViewById(R.id.etNewPassword);
         TextInputEditText etConfirmNewPassword = dialogView.findViewById(R.id.etConfirmNewPassword);
+        ProgressBar dialogProgress = dialogView.findViewById(R.id.progressChangePassword);
         Button btnCancel = dialogView.findViewById(R.id.btnCancelChangePass);
         Button btnSubmit = dialogView.findViewById(R.id.btnSubmitChangePass);
 
@@ -1711,8 +1815,10 @@ public class AuthFragment extends Fragment {
                 return;
             }
 
-            progressBar.setVisibility(View.VISIBLE);
+            if (dialogProgress != null) dialogProgress.setVisibility(View.VISIBLE);
             btnSubmit.setEnabled(false);
+            btnSubmit.setText("Đang cập nhật...");
+            btnCancel.setEnabled(false);
 
             Map<String, Object> body = new HashMap<>();
             body.put("oldPassword", oldPass);
@@ -1722,10 +1828,20 @@ public class AuthFragment extends Fragment {
                 @Override
                 public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                     if (!isAdded() || !dialog.isShowing()) return;
-                    progressBar.setVisibility(View.GONE);
+                    if (dialogProgress != null) dialogProgress.setVisibility(View.GONE);
                     btnSubmit.setEnabled(true);
+                    btnSubmit.setText("Cập nhật");
+                    btnCancel.setEnabled(true);
 
+                    if (response.code() == 401) {
+                        dialog.dismiss();
+                        handleUnauthorizedSession();
+                        return;
+                    }
                     if (response.isSuccessful()) {
+                        if (response.body() != null && response.body().get("token") instanceof String) {
+                            prefManager.saveAuthToken((String) response.body().get("token"));
+                        }
                         dialog.dismiss();
                         Toast.makeText(requireContext(), "Đổi mật khẩu thành công!", Toast.LENGTH_SHORT).show();
                     } else if (response.code() == 400) {
@@ -1739,8 +1855,10 @@ public class AuthFragment extends Fragment {
                 @Override
                 public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                     if (!isAdded() || !dialog.isShowing()) return;
-                    progressBar.setVisibility(View.GONE);
+                    if (dialogProgress != null) dialogProgress.setVisibility(View.GONE);
                     btnSubmit.setEnabled(true);
+                    btnSubmit.setText("Cập nhật");
+                    btnCancel.setEnabled(true);
                     Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
                 }
             });

@@ -50,6 +50,9 @@ public class User {
     @Column(nullable = false, length = 20)
     private String role;
 
+    @Column(name = "token_valid_after")
+    private Long tokenValidAfter;
+
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;
 }

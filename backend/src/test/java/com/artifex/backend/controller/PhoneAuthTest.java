@@ -25,6 +25,7 @@ import static org.mockito.Mockito.*;
 
 class PhoneAuthTest {
     private UserRepository repository;
+    private TokenService tokenService;
     private TestableAuthController controller;
 
     private static class TestableAuthController extends AuthController {
@@ -43,7 +44,8 @@ class PhoneAuthTest {
     @BeforeEach
     void setup() {
         repository = mock(UserRepository.class);
-        controller = new TestableAuthController(repository, mock(FirebaseLoginService.class), new TokenService());
+        tokenService = new TokenService();
+        controller = new TestableAuthController(repository, mock(FirebaseLoginService.class), tokenService);
         stubUsers(List.of());
     }
 
@@ -144,7 +146,13 @@ class PhoneAuthTest {
                 new ForgotPasswordRequest("0912345678", "654321", "newpass123")).getStatusCode());
         assertEquals("secret123", user.getPassword());
         var request = new ForgotPasswordRequest("+84912345678", "123456", "newpass123");
-        assertEquals(HttpStatus.OK, controller.resetPasswordWithOtp(request).getStatusCode());
+        String oldToken = tokenService.generateToken(user.getId(), "USER");
+        var resetResp = controller.resetPasswordWithOtp(request);
+        assertEquals(HttpStatus.OK, resetResp.getStatusCode());
+        assertNull(tokenService.validateHeader("Bearer " + oldToken));
+        assertNotNull(user.getTokenValidAfter());
+        String freshToken = (String) resetResp.getBody().get("token");
+        assertNotNull(tokenService.validateHeader("Bearer " + freshToken));
         assertEquals(HttpStatus.BAD_REQUEST, controller.resetPasswordWithOtp(request).getStatusCode());
         verify(repository, times(1)).save(user);
     }

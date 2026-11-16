@@ -115,6 +115,35 @@ class UserAuthorizationTest {
         assertEquals(HttpStatus.OK, okResp.getStatusCode());
         org.junit.jupiter.api.Assertions.assertTrue(PasswordUtils.isBcryptHash(existingUser.getPassword()));
         org.junit.jupiter.api.Assertions.assertTrue(PasswordUtils.matches("FIREBASE_AUTH", existingUser.getPassword()));
+        org.junit.jupiter.api.Assertions.assertNotNull(existingUser.getTokenValidAfter());
+
+        // Token cũ bị vô hiệu ngay lập tức; token mới trả về hoạt động bình thường
+        assertEquals(HttpStatus.UNAUTHORIZED,
+                userController.getUserById(1L, "Bearer " + user1Token).getStatusCode());
+        String freshToken = (String) okResp.getBody().get("token");
+        org.junit.jupiter.api.Assertions.assertNotNull(freshToken);
+        assertEquals(HttpStatus.OK,
+                userController.getUserById(1L, "Bearer " + freshToken).getStatusCode());
+
+        // Ngay cả sau khi khởi tạo TokenService mới (restart server), token cũ vẫn bị chặn nhờ tokenValidAfter trong DB
+        UserController restartedController = new UserController(userRepository, new TokenService(), cloudinaryService);
+        assertEquals(HttpStatus.UNAUTHORIZED,
+                restartedController.getUserById(1L, "Bearer " + user1Token).getStatusCode());
+        assertEquals(HttpStatus.OK,
+                restartedController.getUserById(1L, "Bearer " + freshToken).getStatusCode());
+    }
+
+    @Test
+    void prodProfileRejectsMissingOrDefaultJwtSecret() {
+        org.springframework.mock.env.MockEnvironment prodEnv = new org.springframework.mock.env.MockEnvironment()
+                .withProperty("spring.profiles.active", "prod");
+        prodEnv.setActiveProfiles("prod");
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> new TokenService("", prodEnv));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> new TokenService("ArtifexSecretKeyForTokenSigning2026Secure256BitKey!", prodEnv));
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> new TokenService("MyCustomStrongProductionSecretKey2026!", prodEnv));
     }
 
     @Test
