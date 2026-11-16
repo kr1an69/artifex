@@ -3,28 +3,65 @@ package com.artifex.backend.controller;
 import com.artifex.backend.dto.AuthDTO.*;
 import com.artifex.backend.entity.User;
 import com.artifex.backend.repository.UserRepository;
+import com.artifex.backend.service.FirebaseLoginService;
 import com.artifex.backend.service.PasswordUtils;
+import com.artifex.backend.service.PhoneUtils;
+import com.artifex.backend.service.TokenService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.*;
 
 class PhoneAuthTest {
     private UserRepository repository;
-    private AuthController controller;
+    private TestableAuthController controller;
+
+    private static class TestableAuthController extends AuthController {
+        boolean smsGatewayResult = true;
+
+        TestableAuthController(UserRepository userRepository, FirebaseLoginService firebaseLoginService, TokenService tokenService) {
+            super(userRepository, firebaseLoginService, tokenService);
+        }
+
+        @Override
+        protected boolean sendRealSmsViaGateway(String rawPhone, String otpCode, String customMessage) {
+            return smsGatewayResult;
+        }
+    }
 
     @BeforeEach
     void setup() {
         repository = mock(UserRepository.class);
-        controller = new AuthController(repository, mock(com.artifex.backend.service.FirebaseLoginService.class), new com.artifex.backend.service.TokenService());
+        controller = new TestableAuthController(repository, mock(FirebaseLoginService.class), new TokenService());
+        stubUsers(List.of());
+    }
+
+    private void stubUsers(List<User> users) {
+        when(repository.findFirstByPhoneIn(anyCollection())).thenAnswer(invocation -> {
+            Collection<String> variants = invocation.getArgument(0);
+            if (variants == null) return Optional.empty();
+            for (User u : users) {
+                if (u.getPhone() == null) continue;
+                String userNorm = PhoneUtils.normalizeVietnamPhone(u.getPhone());
+                for (String v : variants) {
+                    if (u.getPhone().equals(v) || userNorm.equals(PhoneUtils.normalizeVietnamPhone(v))) {
+                        return Optional.of(u);
+                    }
+                }
+            }
+            return Optional.empty();
+        });
     }
 
     private User existingUser() {
@@ -35,10 +72,11 @@ class PhoneAuthTest {
 
     @Test
     void existingAccountCanLoginWithInternationalPhone() {
-        when(repository.findAll()).thenReturn(List.of(existingUser()));
+        stubUsers(List.of(existingUser()));
         var response = controller.login(new LoginRequest("+84 912 345 678", "secret123"));
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(1L, ((User) response.getBody().get("user")).getId());
+        verify(repository, never()).findAll();
     }
 
     @Test
@@ -53,7 +91,7 @@ class PhoneAuthTest {
     @Test
     void wrongPasswordAndGooglePlaceholderCannotLogin() {
         User user = existingUser();
-        when(repository.findAll()).thenReturn(List.of(user));
+        stubUsers(List.of(user));
         assertEquals(HttpStatus.UNAUTHORIZED,
                 controller.login(new LoginRequest("0912345678", "wrong")).getStatusCode());
         user.setPassword("FIREBASE_AUTH");
@@ -63,24 +101,26 @@ class PhoneAuthTest {
 
     @Test
     void unknownPhoneResetDoesNotCreateAccount() {
-        when(repository.findAll()).thenReturn(List.of());
+        stubUsers(List.of());
         assertEquals(HttpStatus.BAD_REQUEST,
                 controller.requestForgotPasswordOtp(new ForgotPasswordOtpRequest("0912345678")).getStatusCode());
         verify(repository, never()).save(any());
+        verify(repository, never()).findAll();
     }
 
     @Test
     void duplicatePhoneCannotRegisterWithDifferentFormat() {
-        when(repository.findAll()).thenReturn(List.of(existingUser()));
+        stubUsers(List.of(existingUser()));
         var request = new RegisterRequest("new@gmail.com", "secret123", "New customer",
                 "+84912345678", null, "123456");
         assertEquals(HttpStatus.BAD_REQUEST, controller.register(request).getStatusCode());
         verify(repository, never()).save(any());
+        verify(repository, never()).findAll();
     }
 
     @Test
     void registrationNeedsOtpButNoUsername() throws Exception {
-        when(repository.findAll()).thenReturn(List.of());
+        stubUsers(List.of());
         when(repository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
         var request = new RegisterRequest("new@gmail.com", "secret123", "New customer",
                 "+84912345678", null, "123456");
@@ -91,12 +131,13 @@ class PhoneAuthTest {
         User user = (User) response.getBody().get("user");
         assertEquals("0912345678", user.getPhone());
         assertNotNull(user.getUsername()); // Legacy database column, generated internally.
+        verify(repository, never()).findAll();
     }
 
     @Test
     void resetOtpIsBoundToPhoneAndConsumed() throws Exception {
         User user = existingUser();
-        when(repository.findAll()).thenReturn(List.of(user));
+        stubUsers(List.of(user));
         when(repository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
         seedOtp("reset:+84912345678", "123456");
         assertEquals(HttpStatus.BAD_REQUEST, controller.resetPasswordWithOtp(
@@ -111,7 +152,7 @@ class PhoneAuthTest {
     @Test
     void verifyResetOtpChecksCodeWithoutConsumingUntilPasswordReset() throws Exception {
         User user = existingUser();
-        when(repository.findAll()).thenReturn(List.of(user));
+        stubUsers(List.of(user));
         when(repository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
         seedOtp("reset:+84912345678", "123456");
 
@@ -133,7 +174,7 @@ class PhoneAuthTest {
     @Test
     void otpIsInvalidatedAfter5FailedAttempts() throws Exception {
         User user = existingUser();
-        when(repository.findAll()).thenReturn(List.of(user));
+        stubUsers(List.of(user));
         seedOtp("reset:+84912345678", "123456");
 
         // Nhập sai 4 lần -> Vẫn còn mã, báo số lần còn lại
@@ -157,21 +198,64 @@ class PhoneAuthTest {
     @Test
     void resendOtpWithinCooldownReturnsTooManyRequests() throws Exception {
         User user = existingUser();
-        when(repository.findAll()).thenReturn(List.of(user));
+        stubUsers(List.of(user));
 
         // Yêu cầu lần 1 -> Thành công (200 OK)
         var resp1 = controller.requestForgotPasswordOtp(new ForgotPasswordOtpRequest("0912345678"));
         assertEquals(HttpStatus.OK, resp1.getStatusCode());
 
-        // Yêu cầu lần 2 ngay lập tức khi chưa hết 1 phút -> Bị chặn 429 TOO_MANY_REQUESTS
+        // Yêu cầu lần 2 ngay lập tức khi chưa hết hạn -> Bị chặn 429 TOO_MANY_REQUESTS
         var resp2 = controller.requestForgotPasswordOtp(new ForgotPasswordOtpRequest("0912345678"));
         assertEquals(HttpStatus.TOO_MANY_REQUESTS, resp2.getStatusCode());
         assertTrue(resp2.getBody().get("message").toString().contains("Vui lòng đợi"));
     }
 
     @Test
+    void gatewayFailureReturnsServiceUnavailableWithoutLockingCooldown() {
+        User user = existingUser();
+        stubUsers(List.of(user));
+        controller.smsGatewayResult = false;
+
+        var regFail = controller.sendRegisterOtp(new RegisterOtpRequest("0987654321", "new@gmail.com"));
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, regFail.getStatusCode());
+        assertEquals("ERROR", regFail.getBody().get("status"));
+        assertEquals(false, regFail.getBody().get("gatewaySent"));
+
+        var forgotFail = controller.requestForgotPasswordOtp(new ForgotPasswordOtpRequest("0912345678"));
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, forgotFail.getStatusCode());
+        assertEquals("ERROR", forgotFail.getBody().get("status"));
+        assertEquals(false, forgotFail.getBody().get("gatewaySent"));
+
+        // Khi gateway hoạt động lại, người dùng được gửi OTP ngay mà không bị kẹt 429
+        controller.smsGatewayResult = true;
+        assertEquals(HttpStatus.OK,
+                controller.sendRegisterOtp(new RegisterOtpRequest("0987654321", "new@gmail.com")).getStatusCode());
+        assertEquals(HttpStatus.OK,
+                controller.requestForgotPasswordOtp(new ForgotPasswordOtpRequest("0912345678")).getStatusCode());
+    }
+
+    @Test
+    void malformedGmailAndOversizedFieldsAreRejected() throws Exception {
+        stubUsers(List.of());
+
+        for (String badEmail : List.of("@gmail.com", "a b@gmail.com", "user@yahoo.com", "user@gmail.com.vn")) {
+            var otpResp = controller.sendRegisterOtp(new RegisterOtpRequest("0987654321", badEmail));
+            assertEquals(HttpStatus.BAD_REQUEST, otpResp.getStatusCode());
+        }
+
+        seedOtp("reg:0987654321", "111222");
+        assertEquals(HttpStatus.BAD_REQUEST, controller.register(new RegisterRequest(
+                "@gmail.com", "secret123", "Valid Name", "0987654321", null, "111222")).getStatusCode());
+        assertEquals(HttpStatus.BAD_REQUEST, controller.register(new RegisterRequest(
+                "valid@gmail.com", "secret123", "A".repeat(101), "0987654321", null, "111222")).getStatusCode());
+        assertEquals(HttpStatus.BAD_REQUEST, controller.register(new RegisterRequest(
+                "valid@gmail.com", "secret123", "Valid Name", "0987654321", "B".repeat(256), "111222")).getStatusCode());
+        verify(repository, never()).save(any());
+    }
+
+    @Test
     void passwordIsHashedWithBcryptAndFirebaseLiteralDoesNotLockOutUser() throws Exception {
-        when(repository.findAll()).thenReturn(List.of());
+        stubUsers(List.of());
         when(repository.save(any(User.class))).thenAnswer(invocation -> {
             User saved = invocation.getArgument(0);
             saved.setId(99L);
@@ -189,7 +273,7 @@ class PhoneAuthTest {
         assertNotEquals("FIREBASE_AUTH", savedUser.getPassword());
 
         // Tài khoản vẫn đăng nhập và khôi phục mật khẩu bình thường, không bị khóa nhầm thành Google account
-        when(repository.findAll()).thenReturn(List.of(savedUser));
+        stubUsers(List.of(savedUser));
         assertEquals(HttpStatus.OK,
                 controller.login(new LoginRequest("0912345678", "FIREBASE_AUTH")).getStatusCode());
         assertEquals(HttpStatus.UNAUTHORIZED,
@@ -200,7 +284,7 @@ class PhoneAuthTest {
 
     @Test
     void anyWhitespaceAnywhereInPasswordIsRejected() throws Exception {
-        when(repository.findAll()).thenReturn(List.of());
+        stubUsers(List.of());
         seedOtp("reg:0987654321", "111222");
 
         // Mật khẩu chứa khoảng trắng ở đầu, giữa, cuối hoặc toàn khoảng trắng đều bị từ chối

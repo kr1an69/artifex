@@ -44,7 +44,8 @@ public class SharedPrefManager {
     }
 
     private String getUserAddressListKey() {
-        return KEY_ADDRESS_LIST_PREFIX + getUserId();
+        Long userId = getUserId();
+        return KEY_ADDRESS_LIST_PREFIX + (userId != null ? userId : "guest");
     }
 
     public void saveUser(Long id, String username, String email, String fullName, String phone, String address, String avatarUrl) {
@@ -76,9 +77,15 @@ public class SharedPrefManager {
 
     public Long getUserId() {
         if (!isLoggedIn()) {
-            return -1L;
+            return null;
         }
-        return ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).getLong(KEY_USER_ID, -1L);
+        long storedId = ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).getLong(KEY_USER_ID, -1L);
+        return storedId > 0 ? storedId : null;
+    }
+
+    public Long getUserIdOrDefault(long defaultUserId) {
+        Long userId = getUserId();
+        return userId != null ? userId : defaultUserId;
     }
 
     public String getFullName() {

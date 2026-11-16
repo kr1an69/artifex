@@ -176,7 +176,7 @@ public class CheckoutBottomSheet extends BottomSheetDialogFragment {
         }
 
         Map<String, Object> body = new HashMap<>();
-        body.put("userId", SharedPrefManager.getInstance(requireContext()).getUserId());
+        body.put("userId", SharedPrefManager.getInstance(requireContext()).getUserIdOrDefault(1L));
         body.put("receiverName", textOf(etName));
         body.put("receiverPhone", textOf(etPhone));
         body.put("shippingAddress", textOf(etAddress));

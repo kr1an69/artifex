@@ -466,6 +466,7 @@ public class AuthFragment extends Fragment {
         }
 
         TextInputEditText etEditFullName = dialogView.findViewById(R.id.etEditFullName);
+        TextInputLayout tilEditEmail = dialogView.findViewById(R.id.tilEditEmail);
         TextInputEditText etEditEmail = dialogView.findViewById(R.id.etEditEmail);
         TextInputEditText etEditPhone = dialogView.findViewById(R.id.etEditPersonalPhone);
         TextInputEditText etEditDob = dialogView.findViewById(R.id.etEditDob);
@@ -476,10 +477,22 @@ public class AuthFragment extends Fragment {
         Button btnCancel = dialogView.findViewById(R.id.btnCancelEditPersonal);
         Button btnSave = dialogView.findViewById(R.id.btnSaveEditPersonal);
 
+        final boolean isGoogleAccount = prefManager.isGoogleAccount();
         etEditFullName.setText(prefManager.getFullName());
         etEditEmail.setText(prefManager.getEmail());
         etEditPhone.setText(prefManager.getPhone());
         etEditDob.setText(prefManager.getDob());
+
+        if (isGoogleAccount) {
+            etEditEmail.setEnabled(false);
+            etEditEmail.setFocusable(false);
+            etEditEmail.setClickable(false);
+            etEditEmail.setAlpha(0.75f);
+            if (tilEditEmail != null) {
+                tilEditEmail.setHelperTextEnabled(true);
+                tilEditEmail.setHelperText("Email được đồng bộ từ tài khoản Google (không thể chỉnh sửa)");
+            }
+        }
 
         String currentGender = prefManager.getGender();
         if ("Nữ".equalsIgnoreCase(currentGender)) {
@@ -526,7 +539,9 @@ public class AuthFragment extends Fragment {
 
         btnSave.setOnClickListener(v -> {
             String newFullName = etEditFullName.getText() != null ? etEditFullName.getText().toString().trim() : "";
-            String newEmail = etEditEmail.getText() != null ? etEditEmail.getText().toString().trim() : "";
+            String newEmail = isGoogleAccount
+                    ? prefManager.getEmail()
+                    : (etEditEmail.getText() != null ? etEditEmail.getText().toString().trim() : "");
             String newPhone = etEditPhone.getText() != null ? etEditPhone.getText().toString().trim() : "";
             String newDob = etEditDob.getText() != null ? etEditDob.getText().toString().trim() : "";
 
@@ -542,8 +557,12 @@ public class AuthFragment extends Fragment {
                 Toast.makeText(requireContext(), "Vui lòng nhập họ và tên!", Toast.LENGTH_SHORT).show();
                 return;
             }
+            if (newFullName.length() > 100) {
+                Toast.makeText(requireContext(), "Họ và tên không được vượt quá 100 ký tự!", Toast.LENGTH_SHORT).show();
+                return;
+            }
 
-            if (!isValidProfileEmail(newEmail, prefManager.getEmail())) {
+            if (!isGoogleAccount && !isValidProfileEmail(newEmail, prefManager.getEmail())) {
                 Toast.makeText(requireContext(), "Email không hợp lệ (hỗ trợ @gmail.com hoặc @artifex.vn)!", Toast.LENGTH_SHORT).show();
                 return;
             }
@@ -554,19 +573,27 @@ public class AuthFragment extends Fragment {
                 return;
             }
 
+            Long userId = prefManager.getUserId();
+            if (userId == null || userId <= 0) {
+                Toast.makeText(requireContext(), "Phiên đăng nhập không hợp lệ, vui lòng đăng nhập lại!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
             progressBar.setVisibility(View.VISIBLE);
             btnSave.setEnabled(false);
 
             // Đồng bộ lên MySQL backend
             Map<String, Object> body = new HashMap<>();
             body.put("fullName", newFullName);
-            body.put("email", newEmail);
+            if (!isGoogleAccount) {
+                body.put("email", newEmail);
+            }
             body.put("phone", cleanPhone);
             body.put("dateOfBirth", newDob);
             body.put("gender", selectedGender);
 
             final String finalGender = selectedGender;
-            apiService.updateProfile(prefManager.getUserId(), body).enqueue(new Callback<Map<String, Object>>() {
+            apiService.updateProfile(userId, body).enqueue(new Callback<Map<String, Object>>() {
                 @Override
                 public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                     if (!isAdded()) return;
@@ -574,7 +601,9 @@ public class AuthFragment extends Fragment {
                     btnSave.setEnabled(true);
 
                     if (response.isSuccessful()) {
-                        prefManager.updatePersonalInfo(newFullName, newEmail, cleanPhone, newDob, finalGender);
+                        if (!applyAuthSessionFromResponse(response.body(), isGoogleAccount)) {
+                            prefManager.updatePersonalInfo(newFullName, newEmail, cleanPhone, newDob, finalGender);
+                        }
                         bindProfileData();
                         dialog.dismiss();
                         Toast.makeText(requireContext(), "Cập nhật thông tin cá nhân thành công!", Toast.LENGTH_SHORT).show();
@@ -1187,10 +1216,14 @@ public class AuthFragment extends Fragment {
                     btnRequestOtp.setEnabled(true);
 
                     if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
+                        if (Boolean.FALSE.equals(response.body().get("gatewaySent"))) {
+                            Toast.makeText(requireContext(), "Không thể gửi tin nhắn SMS OTP lúc này. Vui lòng thử lại sau!", Toast.LENGTH_LONG).show();
+                            return;
+                        }
                         String resolvedUser = contactInput;
                         String maskedContact = response.body().get("maskedContact") != null
                                 ? String.valueOf(response.body().get("maskedContact"))
-                                : contactInput;
+                                : maskPhoneForDisplay(contactInput);
 
                         verifiedPhoneHolder[0] = resolvedUser;
                         verifiedOtpHolder[0] = "";
@@ -1210,6 +1243,7 @@ public class AuthFragment extends Fragment {
                     } else if (response.code() == 429) {
                         // Mã OTP đã gửi trước đó vẫn còn hạn -> Cho phép vào Bước 2 với đúng thời gian chờ còn lại
                         String errMsg = extractErrorMessage(response, "Mã OTP đã gửi trước đó vẫn còn hiệu lực.");
+                        String maskedContact = maskPhoneForDisplay(contactInput);
                         verifiedPhoneHolder[0] = contactInput;
                         verifiedOtpHolder[0] = "";
                         if (etForgotOtpCode != null) etForgotOtpCode.setText("");
@@ -1218,7 +1252,7 @@ public class AuthFragment extends Fragment {
 
                         showStep.accept(2);
                         if (tvOtpDeliveryStatus != null) {
-                            tvOtpDeliveryStatus.setText("Mã OTP đã được gửi tới " + contactInput + " và vẫn còn hiệu lực (3 phút).");
+                            tvOtpDeliveryStatus.setText("Mã OTP đã được gửi tới " + maskedContact + " và vẫn còn hiệu lực (3 phút).");
                         }
                         if (etForgotOtpCode != null) etForgotOtpCode.requestFocus();
                         startForgotCountdown.accept(extractOtpCooldownMillis(errMsg));
@@ -1379,10 +1413,19 @@ public class AuthFragment extends Fragment {
         dialog.show();
     }
 
+    private String maskPhoneForDisplay(String phone) {
+        if (phone == null || phone.length() < 7) return phone != null ? phone : "";
+        return phone.substring(0, 3) + "***" + phone.substring(phone.length() - 3);
+    }
+
     private void uploadAvatarToCloudinary(Uri imageUri) {
         if (!isAdded() || getView() == null) return;
-        progressBar.setVisibility(View.VISIBLE);
         Long userId = prefManager.getUserId();
+        if (userId == null || userId <= 0) {
+            Toast.makeText(requireContext(), "Phiên đăng nhập không hợp lệ, vui lòng đăng nhập lại!", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        progressBar.setVisibility(View.VISIBLE);
         android.content.Context appContext = requireContext().getApplicationContext();
         android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
 
@@ -1495,9 +1538,11 @@ public class AuthFragment extends Fragment {
     }
 
     private void syncDefaultAddressToBackend(String addressLine) {
+        Long userId = prefManager.getUserId();
+        if (userId == null || userId <= 0) return;
         Map<String, Object> body = new HashMap<>();
         body.put("address", addressLine != null ? addressLine : "");
-        apiService.updateProfile(prefManager.getUserId(), body).enqueue(new Callback<Map<String, Object>>() {
+        apiService.updateProfile(userId, body).enqueue(new Callback<Map<String, Object>>() {
             @Override
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {}
             @Override
@@ -1660,6 +1705,12 @@ public class AuthFragment extends Fragment {
                 return;
             }
 
+            Long userId = prefManager.getUserId();
+            if (userId == null || userId <= 0) {
+                Toast.makeText(requireContext(), "Phiên đăng nhập không hợp lệ, vui lòng đăng nhập lại!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
             progressBar.setVisibility(View.VISIBLE);
             btnSubmit.setEnabled(false);
 
@@ -1667,7 +1718,6 @@ public class AuthFragment extends Fragment {
             body.put("oldPassword", oldPass);
             body.put("newPassword", newPass);
 
-            Long userId = prefManager.getUserId();
             apiService.changePassword(userId, body).enqueue(new Callback<Map<String, Object>>() {
                 @Override
                 public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {

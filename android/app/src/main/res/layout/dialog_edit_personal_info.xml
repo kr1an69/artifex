@@ -57,8 +57,9 @@
                     android:textColor="@color/artifex_text_primary" />
             </com.google.android.material.textfield.TextInputLayout>
 
-            <!-- 2. Email (Có thể thay đổi) -->
+            <!-- 2. Email (Có thể thay đổi với tài khoản SĐT; khóa với tài khoản Google) -->
             <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/tilEditEmail"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"

@@ -260,4 +260,58 @@ class UserAuthorizationTest {
         verify(mockUploader).upload(any(), any());
         org.mockito.Mockito.verifyNoMoreInteractions(mockUploader);
     }
+
+    @Test
+    void updateProfileValidatesFieldsLengthsDobGenderAndBlocksGoogleEmailChange() {
+        String userToken = tokenService.generateToken(1L, "USER");
+        User regularUser = User.builder()
+                .id(1L).username("user1").fullName("User One")
+                .email("user1@gmail.com").phone("0901234567")
+                .password(PasswordUtils.hash("123456")).role("USER").build();
+        when(userRepository.findById(1L)).thenReturn(Optional.of(regularUser));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // Blank fullName -> 400
+        UpdateProfileRequest blankName = new UpdateProfileRequest();
+        blankName.setFullName("   ");
+        assertEquals(HttpStatus.BAD_REQUEST, userController.updateProfile(1L, "Bearer " + userToken, blankName).getStatusCode());
+
+        // Oversized fullName / address -> 400
+        UpdateProfileRequest longName = new UpdateProfileRequest();
+        longName.setFullName("A".repeat(101));
+        assertEquals(HttpStatus.BAD_REQUEST, userController.updateProfile(1L, "Bearer " + userToken, longName).getStatusCode());
+
+        UpdateProfileRequest longAddr = new UpdateProfileRequest();
+        longAddr.setAddress("B".repeat(256));
+        assertEquals(HttpStatus.BAD_REQUEST, userController.updateProfile(1L, "Bearer " + userToken, longAddr).getStatusCode());
+
+        // Invalid dateOfBirth (31/02 or wrong format) -> 400
+        UpdateProfileRequest badDob = new UpdateProfileRequest();
+        badDob.setDateOfBirth("31/02/2000");
+        assertEquals(HttpStatus.BAD_REQUEST, userController.updateProfile(1L, "Bearer " + userToken, badDob).getStatusCode());
+
+        // Invalid gender -> 400
+        UpdateProfileRequest badGender = new UpdateProfileRequest();
+        badGender.setGender("Robot");
+        assertEquals(HttpStatus.BAD_REQUEST, userController.updateProfile(1L, "Bearer " + userToken, badGender).getStatusCode());
+
+        // Google account cannot change email -> 400, but can update phone keeping same email -> 200
+        String googleToken = tokenService.generateToken(2L, "USER");
+        User googleUser = User.builder()
+                .id(2L).firebaseUid("fb-uid-2").username("fb_2").fullName("Google User")
+                .email("googleuser@gmail.com").password(PasswordUtils.FIREBASE_PLACEHOLDER).role("USER").build();
+        when(userRepository.findById(2L)).thenReturn(Optional.of(googleUser));
+
+        UpdateProfileRequest changeGoogleEmail = new UpdateProfileRequest();
+        changeGoogleEmail.setEmail("other@gmail.com");
+        assertEquals(HttpStatus.BAD_REQUEST, userController.updateProfile(2L, "Bearer " + googleToken, changeGoogleEmail).getStatusCode());
+
+        UpdateProfileRequest keepGoogleEmailAddPhone = new UpdateProfileRequest();
+        keepGoogleEmailAddPhone.setEmail("googleuser@gmail.com");
+        keepGoogleEmailAddPhone.setPhone("0988776655");
+        keepGoogleEmailAddPhone.setDateOfBirth("15/08/2000");
+        keepGoogleEmailAddPhone.setGender("Nữ");
+        assertEquals(HttpStatus.OK, userController.updateProfile(2L, "Bearer " + googleToken, keepGoogleEmailAddPhone).getStatusCode());
+        verify(userRepository, never()).findAll();
+    }
 }

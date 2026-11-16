@@ -4,7 +4,9 @@ import com.artifex.backend.dto.AuthDTO.*;
 import com.artifex.backend.entity.User;
 import com.artifex.backend.repository.UserRepository;
 import com.artifex.backend.service.PasswordUtils;
+import com.artifex.backend.service.PhoneUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +17,10 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.format.ResolverStyle;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -29,6 +35,15 @@ public class UserController {
 
     private static final long MAX_AVATAR_FILE_BYTES = 5L * 1024 * 1024;
     private static final int MAX_AVATAR_URL_LENGTH = 500;
+    private static final int MAX_FULL_NAME_LENGTH = 100;
+    private static final int MAX_EMAIL_LENGTH = 100;
+    private static final int MAX_ADDRESS_LENGTH = 255;
+    private static final int MAX_DOB_LENGTH = 20;
+    private static final int MAX_GENDER_LENGTH = 20;
+    private static final Set<String> ALLOWED_GENDERS = Set.of("Nam", "Nữ", "Khác");
+    private static final DateTimeFormatter DOB_FORMATTER = DateTimeFormatter
+            .ofPattern("dd/MM/uuuu")
+            .withResolverStyle(ResolverStyle.STRICT);
     private static final Set<String> ALLOWED_AVATAR_MIME_TYPES = Set.of(
             "image/jpeg", "image/jpg", "image/png", "image/webp"
     );
@@ -79,42 +94,68 @@ public class UserController {
         }
 
         User user = userOpt.get();
-        if (request.getEmail() != null && !request.getEmail().trim().isEmpty()) {
-            String newEmail = request.getEmail().trim().toLowerCase();
+        boolean isGoogleAccount = PasswordUtils.isFirebaseOnlyAccount(user.getPassword())
+                || (user.getFirebaseUid() != null && !user.getFirebaseUid().isBlank());
+
+        if (request.getEmail() != null) {
+            String newEmail = request.getEmail().trim().toLowerCase(Locale.ROOT);
+            if (newEmail.isEmpty()) {
+                response.put("status", "ERROR");
+                response.put("message", "Địa chỉ Email không được để trống!");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
+            if (newEmail.length() > MAX_EMAIL_LENGTH) {
+                response.put("status", "ERROR");
+                response.put("message", "Email không được vượt quá " + MAX_EMAIL_LENGTH + " ký tự!");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
             boolean unchangedExistingEmail = user.getEmail() != null && newEmail.equalsIgnoreCase(user.getEmail());
+            if (isGoogleAccount && !unchangedExistingEmail) {
+                response.put("status", "ERROR");
+                response.put("message", "Tài khoản đăng nhập bằng Google không thể thay đổi địa chỉ Email tại đây!");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
             if (!unchangedExistingEmail && !newEmail.matches("^[a-zA-Z0-9._%+-]+@(gmail\\.com|artifex\\.vn)$")) {
                 response.put("status", "ERROR");
                 response.put("message", "Email phải có định dạng hợp lệ (@gmail.com hoặc @artifex.vn)!");
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
             }
-            if (!newEmail.equalsIgnoreCase(user.getEmail()) && userRepository.existsByEmail(newEmail)) {
+            if (!unchangedExistingEmail && userRepository.existsByEmail(newEmail)) {
                 response.put("status", "ERROR");
                 response.put("message", "Email đã được sử dụng bởi tài khoản khác!");
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
             }
             user.setEmail(newEmail);
         }
-        if (request.getFullName() != null && !request.getFullName().trim().isEmpty()) {
-            user.setFullName(request.getFullName().trim());
+        if (request.getFullName() != null) {
+            String trimmedName = request.getFullName().trim();
+            if (trimmedName.isEmpty()) {
+                response.put("status", "ERROR");
+                response.put("message", "Họ và tên không được để trống!");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
+            if (trimmedName.length() > MAX_FULL_NAME_LENGTH) {
+                response.put("status", "ERROR");
+                response.put("message", "Họ và tên không được vượt quá " + MAX_FULL_NAME_LENGTH + " ký tự!");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
+            user.setFullName(trimmedName);
         }
-        if (request.getPhone() != null && !request.getPhone().trim().isEmpty()) {
+        if (request.getPhone() != null) {
             String rawPhone = request.getPhone().trim();
-            if (!isPhoneNumber(rawPhone)) {
+            if (rawPhone.isEmpty()) {
+                response.put("status", "ERROR");
+                response.put("message", "Số điện thoại không được để trống!");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
+            if (!PhoneUtils.isPhoneNumber(rawPhone)) {
                 response.put("status", "ERROR");
                 response.put("message", "Số điện thoại không hợp lệ! Vui lòng nhập đúng 10 số (ví dụ: 09xxxxxxxx).");
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
             }
-            String domesticPhone = toDomesticVietnamPhone(rawPhone);
-            java.util.List<String> variants = getPhoneVariants(rawPhone);
+            String domesticPhone = PhoneUtils.toDomesticVietnamPhone(rawPhone);
+            java.util.List<String> variants = PhoneUtils.getPhoneVariants(rawPhone);
             boolean phoneTaken = userRepository.existsByPhoneInAndIdNot(variants, id);
-            if (!phoneTaken) {
-                String targetNorm = normalizeVietnamPhone(rawPhone);
-                java.util.List<User> all = userRepository.findAll();
-                if (all != null && !all.isEmpty()) {
-                    phoneTaken = all.stream()
-                            .anyMatch(u -> !u.getId().equals(id) && u.getPhone() != null && normalizeVietnamPhone(u.getPhone()).equals(targetNorm));
-                }
-            }
             if (phoneTaken) {
                 response.put("status", "ERROR");
                 response.put("message", "Số điện thoại này đã được sử dụng bởi tài khoản khác!");
@@ -123,16 +164,56 @@ public class UserController {
             user.setPhone(domesticPhone);
         }
         if (request.getAddress() != null) {
-            user.setAddress(request.getAddress().trim());
+            String trimmedAddress = request.getAddress().trim();
+            if (trimmedAddress.length() > MAX_ADDRESS_LENGTH) {
+                response.put("status", "ERROR");
+                response.put("message", "Địa chỉ không được vượt quá " + MAX_ADDRESS_LENGTH + " ký tự!");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
+            user.setAddress(trimmedAddress);
         }
         if (request.getDateOfBirth() != null) {
-            user.setDateOfBirth(request.getDateOfBirth().trim());
+            String trimmedDob = request.getDateOfBirth().trim();
+            if (!trimmedDob.isEmpty()) {
+                if (trimmedDob.length() > MAX_DOB_LENGTH) {
+                    response.put("status", "ERROR");
+                    response.put("message", "Ngày sinh không được vượt quá " + MAX_DOB_LENGTH + " ký tự!");
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+                }
+                try {
+                    LocalDate parsedDob = LocalDate.parse(trimmedDob, DOB_FORMATTER);
+                    if (parsedDob.isAfter(LocalDate.now())) {
+                        response.put("status", "ERROR");
+                        response.put("message", "Ngày sinh không được lớn hơn ngày hiện tại!");
+                        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+                    }
+                } catch (DateTimeParseException e) {
+                    response.put("status", "ERROR");
+                    response.put("message", "Ngày sinh không hợp lệ (định dạng đúng: dd/MM/yyyy)!");
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+                }
+            }
+            user.setDateOfBirth(trimmedDob);
         }
         if (request.getGender() != null) {
-            user.setGender(request.getGender().trim());
+            String trimmedGender = request.getGender().trim();
+            if (!trimmedGender.isEmpty()
+                    && (trimmedGender.length() > MAX_GENDER_LENGTH || !ALLOWED_GENDERS.contains(trimmedGender))) {
+                response.put("status", "ERROR");
+                response.put("message", "Giới tính không hợp lệ (chỉ chấp nhận Nam, Nữ hoặc Khác)!");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            }
+            user.setGender(trimmedGender);
         }
 
-        User updatedUser = userRepository.save(user);
+        User updatedUser;
+        try {
+            updatedUser = userRepository.save(user);
+        } catch (DataIntegrityViolationException e) {
+            response.put("status", "ERROR");
+            response.put("message", "Số điện thoại hoặc Email đã được sử dụng bởi tài khoản khác!");
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+        }
 
         response.put("status", "SUCCESS");
         response.put("message", "Cập nhật thông tin thành công!");
@@ -296,55 +377,6 @@ public class UserController {
         response.put("status", "SUCCESS");
         response.put("message", "Đổi mật khẩu thành công!");
         return ResponseEntity.ok(response);
-    }
-
-    // ==================== HÀM HỖ TRỢ XỬ LÝ SỐ ĐIỆN THOẠI VIỆT NAM ====================
-
-    private boolean isPhoneNumber(String input) {
-        if (input == null) return false;
-        String cleaned = input.replaceAll("[\\s\\-\\.\\(\\)]", "");
-        return cleaned.matches("^(\\+?840?|0)[35789]\\d{8}$");
-    }
-
-    private String normalizeVietnamPhone(String rawPhone) {
-        if (rawPhone == null) return "";
-        String cleaned = rawPhone.replaceAll("[^0-9+]", "");
-        if (cleaned.startsWith("+840")) {
-            return "+84" + cleaned.substring(4);
-        }
-        if (cleaned.startsWith("840") && cleaned.length() == 12) {
-            return "+84" + cleaned.substring(3);
-        }
-        if (cleaned.startsWith("0")) {
-            return "+84" + cleaned.substring(1);
-        }
-        if (cleaned.startsWith("84")) {
-            return "+" + cleaned;
-        }
-        if (!cleaned.startsWith("+") && !cleaned.isEmpty()) {
-            return "+" + cleaned;
-        }
-        return cleaned;
-    }
-
-    private String toDomesticVietnamPhone(String rawPhone) {
-        if (rawPhone == null) return "";
-        String e164 = normalizeVietnamPhone(rawPhone);
-        if (e164.startsWith("+84")) {
-            return "0" + e164.substring(3);
-        }
-        return rawPhone.replaceAll("[^0-9]", "");
-    }
-
-    private java.util.List<String> getPhoneVariants(String phoneInput) {
-        if (phoneInput == null || phoneInput.isBlank()) return java.util.Collections.emptyList();
-        String domestic = toDomesticVietnamPhone(phoneInput);
-        String e164 = normalizeVietnamPhone(phoneInput);
-        String noPlus = e164.startsWith("+") ? e164.substring(1) : e164;
-        return java.util.stream.Stream.of(domestic, e164, noPlus)
-                .filter(p -> p != null && !p.isBlank())
-                .distinct()
-                .toList();
     }
 
     /**
