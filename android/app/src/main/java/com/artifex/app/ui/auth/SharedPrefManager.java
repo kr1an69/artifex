@@ -61,12 +61,29 @@ public class SharedPrefManager {
         editor.putBoolean(KEY_IS_LOGGED_IN, true);
         editor.apply();
 
-        // Khởi tạo địa chỉ mặc định trong sổ địa chỉ của user này nếu sổ đang trống
+        // Đồng bộ địa chỉ mặc định trong sổ địa chỉ local với trường address từ server
         if (address != null && !address.trim().isEmpty()) {
+            String trimmedAddress = address.trim();
             List<UserAddress> currentList = getAddressList();
             if (currentList.isEmpty()) {
-                UserAddress defaultAddr = new UserAddress(fullName, phone, address, "🏠 Nhà riêng", true);
+                UserAddress defaultAddr = new UserAddress(fullName, phone, trimmedAddress, "🏠 Nhà riêng", true);
                 addAddress(defaultAddr);
+            } else {
+                UserAddress defaultAddr = null;
+                for (UserAddress item : currentList) {
+                    if (item.isDefault()) {
+                        defaultAddr = item;
+                        break;
+                    }
+                }
+                if (defaultAddr == null) {
+                    defaultAddr = currentList.get(0);
+                    defaultAddr.setDefault(true);
+                }
+                if (!trimmedAddress.equals(defaultAddr.getAddressLine())) {
+                    defaultAddr.setAddressLine(trimmedAddress);
+                    saveAddressList(currentList);
+                }
             }
         }
     }
@@ -161,6 +178,32 @@ public class SharedPrefManager {
         String json = gson.toJson(list);
         SharedPreferences.Editor editor = ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).edit();
         editor.putString(getUserAddressListKey(), json);
+        editor.apply();
+    }
+
+    public void replaceAddressListFromServer(List<UserAddress> serverList) {
+        List<UserAddress> safeList = serverList != null ? new ArrayList<>(serverList) : new ArrayList<>();
+        String defaultAddressLine = "";
+        if (!safeList.isEmpty()) {
+            UserAddress defaultAddr = null;
+            for (UserAddress item : safeList) {
+                if (item.isDefault()) {
+                    if (defaultAddr == null) {
+                        defaultAddr = item;
+                    } else {
+                        item.setDefault(false);
+                    }
+                }
+            }
+            if (defaultAddr == null) {
+                defaultAddr = safeList.get(0);
+                defaultAddr.setDefault(true);
+            }
+            defaultAddressLine = defaultAddr.getAddressLine();
+        }
+        SharedPreferences.Editor editor = ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).edit();
+        editor.putString(KEY_ADDRESS, defaultAddressLine);
+        editor.putString(getUserAddressListKey(), gson.toJson(safeList));
         editor.apply();
     }
 

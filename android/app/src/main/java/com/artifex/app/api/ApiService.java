@@ -67,6 +67,25 @@ public interface ApiService {
     @retrofit2.http.PUT("api/users/{id}/password")
     retrofit2.Call<java.util.Map<String, Object>> changePassword(@retrofit2.http.Path("id") Long id, @retrofit2.http.Body java.util.Map<String, Object> body);
 
+    @retrofit2.http.GET("api/users/{id}/addresses")
+    retrofit2.Call<java.util.Map<String, Object>> getUserAddresses(@retrofit2.http.Path("id") Long id);
+
+    @retrofit2.http.POST("api/users/{id}/addresses")
+    retrofit2.Call<java.util.Map<String, Object>> addUserAddress(@retrofit2.http.Path("id") Long id, @retrofit2.http.Body java.util.Map<String, Object> body);
+
+    @retrofit2.http.PUT("api/users/{id}/addresses/{addressId}")
+    retrofit2.Call<java.util.Map<String, Object>> updateUserAddress(
+            @retrofit2.http.Path("id") Long id,
+            @retrofit2.http.Path("addressId") Long addressId,
+            @retrofit2.http.Body java.util.Map<String, Object> body
+    );
+
+    @retrofit2.http.DELETE("api/users/{id}/addresses/{addressId}")
+    retrofit2.Call<java.util.Map<String, Object>> deleteUserAddress(
+            @retrofit2.http.Path("id") Long id,
+            @retrofit2.http.Path("addressId") Long addressId
+    );
+
     @retrofit2.http.GET("api/products")
     retrofit2.Call<java.util.Map<String, Object>> getAuthRecommendedProducts(@retrofit2.http.Query("size") int size);
 

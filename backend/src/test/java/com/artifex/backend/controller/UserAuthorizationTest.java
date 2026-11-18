@@ -3,7 +3,10 @@ package com.artifex.backend.controller;
 import com.artifex.backend.dto.AuthDTO.ChangePasswordRequest;
 import com.artifex.backend.dto.AuthDTO.UpdateAvatarRequest;
 import com.artifex.backend.dto.AuthDTO.UpdateProfileRequest;
+import com.artifex.backend.dto.AuthDTO.UserAddressRequest;
 import com.artifex.backend.entity.User;
+import com.artifex.backend.entity.UserAddress;
+import com.artifex.backend.repository.UserAddressRepository;
 import com.artifex.backend.repository.UserRepository;
 import com.artifex.backend.service.CloudinaryService;
 import com.artifex.backend.service.PasswordUtils;
@@ -24,6 +27,7 @@ import static org.mockito.Mockito.*;
 class UserAuthorizationTest {
 
     private UserRepository userRepository;
+    private UserAddressRepository userAddressRepository;
     private TokenService tokenService;
     private CloudinaryService cloudinaryService;
     private UserController userController;
@@ -31,9 +35,10 @@ class UserAuthorizationTest {
     @BeforeEach
     void setup() {
         userRepository = mock(UserRepository.class);
+        userAddressRepository = mock(UserAddressRepository.class);
         tokenService = new TokenService();
         cloudinaryService = mock(CloudinaryService.class);
-        userController = new UserController(userRepository, tokenService, cloudinaryService);
+        userController = new UserController(userRepository, userAddressRepository, tokenService, cloudinaryService);
     }
 
     @Test
@@ -126,7 +131,7 @@ class UserAuthorizationTest {
                 userController.getUserById(1L, "Bearer " + freshToken).getStatusCode());
 
         // Ngay cả sau khi khởi tạo TokenService mới (restart server), token cũ vẫn bị chặn nhờ tokenValidAfter trong DB
-        UserController restartedController = new UserController(userRepository, new TokenService(), cloudinaryService);
+        UserController restartedController = new UserController(userRepository, userAddressRepository, new TokenService(), cloudinaryService);
         assertEquals(HttpStatus.UNAUTHORIZED,
                 restartedController.getUserById(1L, "Bearer " + user1Token).getStatusCode());
         assertEquals(HttpStatus.OK,
@@ -342,5 +347,116 @@ class UserAuthorizationTest {
         keepGoogleEmailAddPhone.setGender("Nữ");
         assertEquals(HttpStatus.OK, userController.updateProfile(2L, "Bearer " + googleToken, keepGoogleEmailAddPhone).getStatusCode());
         verify(userRepository, never()).findAll();
+    }
+
+    @Test
+    void addressBookCrudSyncsDefaultAddressAndBlocksIdor() {
+        String user1Token = tokenService.generateToken(1L, "USER");
+        User user1 = User.builder()
+                .id(1L).username("user1").fullName("Nguyễn Văn A")
+                .email("user1@gmail.com").phone("0901234567").role("USER").build();
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user1));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        java.util.List<UserAddress> store = new java.util.ArrayList<>();
+        java.util.concurrent.atomic.AtomicLong idSeq = new java.util.concurrent.atomic.AtomicLong(10L);
+        when(userAddressRepository.findByUserIdOrderByDefaultAddressDescIdDesc(1L)).thenAnswer(inv -> new java.util.ArrayList<>(store));
+        when(userAddressRepository.save(any(UserAddress.class))).thenAnswer(inv -> {
+            UserAddress addr = inv.getArgument(0);
+            if (addr.getId() == null) {
+                addr.setId(idSeq.incrementAndGet());
+                store.add(addr);
+            }
+            return addr;
+        });
+        when(userAddressRepository.findByIdAndUserId(anyLong(), eq(1L))).thenAnswer(inv -> {
+            Long reqId = inv.getArgument(0);
+            return store.stream().filter(a -> reqId.equals(a.getId())).findFirst();
+        });
+        doAnswer(inv -> {
+            UserAddress addr = inv.getArgument(0);
+            store.removeIf(a -> a.getId().equals(addr.getId()));
+            return null;
+        }).when(userAddressRepository).delete(any(UserAddress.class));
+
+        // IDOR: User 1 cannot access or mutate User 2's address book
+        assertEquals(HttpStatus.FORBIDDEN,
+                userController.getUserAddresses(2L, "Bearer " + user1Token).getStatusCode());
+        assertEquals(HttpStatus.FORBIDDEN,
+                userController.addUserAddress(2L, "Bearer " + user1Token,
+                        new UserAddressRequest("Hacker", "0901234567", "123 ABC", "🏠 Nhà riêng", true)).getStatusCode());
+
+        // Validation: invalid phone -> 400
+        assertEquals(HttpStatus.BAD_REQUEST,
+                userController.addUserAddress(1L, "Bearer " + user1Token,
+                        new UserAddressRequest("Nguyễn Văn A", "12345", "Địa chỉ 1", "🏠 Nhà riêng", true)).getStatusCode());
+
+        // Add 1st address -> automatically becomes default & syncs users.address
+        var add1 = userController.addUserAddress(1L, "Bearer " + user1Token,
+                new UserAddressRequest("Nguyễn Văn A", "+84901234567", "Địa chỉ 1", "🏠 Nhà riêng", false));
+        assertEquals(HttpStatus.CREATED, add1.getStatusCode());
+        assertEquals("Địa chỉ 1", user1.getAddress());
+        assertEquals(1, store.size());
+        assertEquals("0901234567", store.get(0).getPhone());
+        org.junit.jupiter.api.Assertions.assertTrue(store.get(0).isDefaultAddress());
+
+        // Add 2nd address marked as default -> demotes 1st & updates users.address
+        var add2 = userController.addUserAddress(1L, "Bearer " + user1Token,
+                new UserAddressRequest("Trần Văn B", "0987654321", "Địa chỉ 2", "🏢 Văn phòng", true));
+        assertEquals(HttpStatus.CREATED, add2.getStatusCode());
+        assertEquals("Địa chỉ 2", user1.getAddress());
+        org.junit.jupiter.api.Assertions.assertFalse(store.get(0).isDefaultAddress());
+        org.junit.jupiter.api.Assertions.assertTrue(store.get(1).isDefaultAddress());
+
+        // Delete default (2nd) address -> promotes 1st to default & syncs users.address
+        Long secondId = store.get(1).getId();
+        var del2 = userController.deleteUserAddress(1L, secondId, "Bearer " + user1Token);
+        assertEquals(HttpStatus.OK, del2.getStatusCode());
+        assertEquals(1, store.size());
+        org.junit.jupiter.api.Assertions.assertTrue(store.get(0).isDefaultAddress());
+        assertEquals("Địa chỉ 1", user1.getAddress());
+
+        // Delete remaining address -> users.address becomes null
+        Long firstId = store.get(0).getId();
+        var del1 = userController.deleteUserAddress(1L, firstId, "Bearer " + user1Token);
+        assertEquals(HttpStatus.OK, del1.getStatusCode());
+        assertEquals(0, store.size());
+        org.junit.jupiter.api.Assertions.assertNull(user1.getAddress());
+    }
+
+    @Test
+    void getUserAddressesMigratesLegacyAddressAndProfileUpdateSyncsDefault() {
+        String user1Token = tokenService.generateToken(1L, "USER");
+        User legacyUser = User.builder()
+                .id(1L).username("nguyenvana").fullName("Nguyễn Văn A")
+                .email("vana@artifex.vn").phone("0901234567")
+                .address("Khu phố 6, Thủ Đức").role("USER").build();
+        when(userRepository.findById(1L)).thenReturn(Optional.of(legacyUser));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        java.util.List<UserAddress> store = new java.util.ArrayList<>();
+        when(userAddressRepository.findByUserIdOrderByDefaultAddressDescIdDesc(1L)).thenAnswer(inv -> new java.util.ArrayList<>(store));
+        when(userAddressRepository.save(any(UserAddress.class))).thenAnswer(inv -> {
+            UserAddress addr = inv.getArgument(0);
+            if (addr.getId() == null) {
+                addr.setId(50L);
+                store.add(addr);
+            }
+            return addr;
+        });
+
+        var listResp = userController.getUserAddresses(1L, "Bearer " + user1Token);
+        assertEquals(HttpStatus.OK, listResp.getStatusCode());
+        @SuppressWarnings("unchecked")
+        java.util.List<Map<String, Object>> addresses = (java.util.List<Map<String, Object>>) listResp.getBody().get("addresses");
+        assertEquals(1, addresses.size());
+        assertEquals("Khu phố 6, Thủ Đức", addresses.get(0).get("addressLine"));
+        assertEquals(true, addresses.get(0).get("isDefault"));
+
+        UpdateProfileRequest profileUpdate = new UpdateProfileRequest();
+        profileUpdate.setAddress("92 Cách Mạng Tháng Tám, Q.1");
+        var updResp = userController.updateProfile(1L, "Bearer " + user1Token, profileUpdate);
+        assertEquals(HttpStatus.OK, updResp.getStatusCode());
+        assertEquals("92 Cách Mạng Tháng Tám, Q.1", store.get(0).getAddressLine());
     }
 }

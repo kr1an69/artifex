@@ -357,12 +357,13 @@ public class AuthFragment extends Fragment {
         }
     }
 
-            private void checkLoginState() {
+    private void checkLoginState() {
         if (prefManager.isLoggedIn()) {
             layoutAuthForm.setVisibility(View.GONE);
             layoutProfile.setVisibility(View.VISIBLE);
             bindProfileData();
             fetchLatestUserProfile();
+            fetchUserAddressesFromBackend(null, null);
             loadRecommendationProducts();
         } else {
             layoutAuthForm.setVisibility(View.VISIBLE);
@@ -377,7 +378,7 @@ public class AuthFragment extends Fragment {
         apiService.getUserProfile(userId).enqueue(new Callback<Map<String, Object>>() {
             @Override
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
-                if (!isAdded()) return;
+                if (!isAdded() || !prefManager.isLoggedIn() || !userId.equals(prefManager.getUserId())) return;
                 if (response.code() == 401) {
                     handleUnauthorizedSession();
                     return;
@@ -390,6 +391,32 @@ public class AuthFragment extends Fragment {
             @Override
             public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                 // Giữ nguyên dữ liệu cache trong SharedPrefManager nếu offline
+            }
+        });
+    }
+
+    private void fetchUserAddressesFromBackend(
+            @Nullable AddressAdapter adapter,
+            @Nullable List<UserAddress> addressList) {
+        Long userId = prefManager.getUserId();
+        if (userId == null || userId <= 0) return;
+
+        apiService.getUserAddresses(userId).enqueue(new Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                if (!isAdded() || !prefManager.isLoggedIn() || !userId.equals(prefManager.getUserId())) return;
+                if (response.code() == 401) {
+                    handleUnauthorizedSession();
+                    return;
+                }
+                if (response.isSuccessful() && applyAddressesFromResponse(response.body(), addressList, adapter)) {
+                    refreshAddressList();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                // Giữ nguyên sổ địa chỉ cache trong SharedPrefManager nếu offline
             }
         });
     }
@@ -1567,11 +1594,73 @@ public class AuthFragment extends Fragment {
         adapterHolder[0] = new AddressAdapter(addressList, new AddressAdapter.OnAddressListener() {
             @Override
             public void onSelect(UserAddress address) {
-                prefManager.setDefaultAddress(address.getId());
-                bindProfileData();
-                syncDefaultAddressToBackend(address.getAddressLine());
-                bottomSheet.dismiss();
-                Toast.makeText(requireContext(), "Đã chọn địa chỉ: " + address.getTag(), Toast.LENGTH_SHORT).show();
+                Long userId = prefManager.getUserId();
+                if (userId == null || userId <= 0) {
+                    bottomSheet.dismiss();
+                    handleUnauthorizedSession();
+                    return;
+                }
+                Long addressId = parseServerAddressId(address);
+                if (addressId == null) {
+                    Map<String, Object> body = new HashMap<>();
+                    body.put("receiverName", address.getReceiverName());
+                    body.put("phone", address.getPhone());
+                    body.put("addressLine", address.getAddressLine());
+                    body.put("tag", address.getTag());
+                    body.put("isDefault", true);
+                    apiService.addUserAddress(userId, body).enqueue(new Callback<Map<String, Object>>() {
+                        @Override
+                        public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                            if (!isAdded()) return;
+                            if (response.code() == 401) {
+                                bottomSheet.dismiss();
+                                handleUnauthorizedSession();
+                                return;
+                            }
+                            if (response.isSuccessful() && applyAddressesFromResponse(response.body(), addressList, adapterHolder[0])) {
+                                bindProfileData();
+                                bottomSheet.dismiss();
+                                Toast.makeText(requireContext(), "Đã chọn địa chỉ: " + address.getTag(), Toast.LENGTH_SHORT).show();
+                            } else {
+                                Toast.makeText(requireContext(), extractErrorMessage(response, "Không thể chọn địa chỉ!"), Toast.LENGTH_SHORT).show();
+                            }
+                        }
+
+                        @Override
+                        public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                            if (!isAdded()) return;
+                            Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                    return;
+                }
+
+                Map<String, Object> body = new HashMap<>();
+                body.put("isDefault", true);
+                apiService.updateUserAddress(userId, addressId, body).enqueue(new Callback<Map<String, Object>>() {
+                    @Override
+                    public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                        if (!isAdded()) return;
+                        if (response.code() == 401) {
+                            bottomSheet.dismiss();
+                            handleUnauthorizedSession();
+                            return;
+                        }
+                        if (response.isSuccessful() && applyAddressesFromResponse(response.body(), addressList, adapterHolder[0])) {
+                            bindProfileData();
+                            bottomSheet.dismiss();
+                            Toast.makeText(requireContext(), "Đã chọn địa chỉ: " + address.getTag(), Toast.LENGTH_SHORT).show();
+                        } else {
+                            Toast.makeText(requireContext(), extractErrorMessage(response, "Không thể cập nhật địa chỉ mặc định!"), Toast.LENGTH_SHORT).show();
+                        }
+                    }
+
+                    @Override
+                    public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                        if (!isAdded()) return;
+                        Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                });
             }
 
             @Override
@@ -1581,66 +1670,73 @@ public class AuthFragment extends Fragment {
 
             @Override
             public void onDelete(UserAddress address) {
-                showConfirmDeleteAddressDialog(address, adapterHolder[0], addressList);
+                showConfirmDeleteAddressDialog(bottomSheet, address, adapterHolder[0], addressList);
             }
         });
 
         rvAddresses.setAdapter(adapterHolder[0]);
+        fetchUserAddressesFromBackend(adapterHolder[0], addressList);
 
         btnAddNew.setOnClickListener(v -> showAddOrEditAddressDialog(bottomSheet, adapterHolder[0], addressList, null));
 
         bottomSheet.show();
     }
 
-    private void showConfirmDeleteAddressDialog(UserAddress address, AddressAdapter adapter, List<UserAddress> addressList) {
+    private void showConfirmDeleteAddressDialog(
+            BottomSheetDialog parentSheet,
+            UserAddress address,
+            AddressAdapter adapter,
+            List<UserAddress> addressList) {
         new MaterialAlertDialogBuilder(requireContext())
                 .setTitle("Xác nhận xóa địa chỉ")
                 .setMessage("Bạn có chắc chắn muốn xóa địa chỉ nhận hàng của \"" + address.getReceiverName() + "\" không?")
                 .setNegativeButton("Hủy", (dialog, which) -> dialog.dismiss())
                 .setPositiveButton("Xóa", (dialog, which) -> {
-                    prefManager.deleteAddress(address.getId());
-                    if (addressList != null) {
-                        addressList.clear();
-                        addressList.addAll(prefManager.getAddressList());
+                    Long userId = prefManager.getUserId();
+                    if (userId == null || userId <= 0) {
+                        if (parentSheet != null && parentSheet.isShowing()) parentSheet.dismiss();
+                        handleUnauthorizedSession();
+                        return;
                     }
-                    if (adapter != null) {
-                        adapter.notifyDataSetChanged();
+                    Long addressId = parseServerAddressId(address);
+                    if (addressId == null) {
+                        prefManager.deleteAddress(address.getId());
+                        if (addressList != null) {
+                            addressList.clear();
+                            addressList.addAll(prefManager.getAddressList());
+                        }
+                        if (adapter != null) adapter.notifyDataSetChanged();
+                        bindProfileData();
+                        fetchUserAddressesFromBackend(adapter, addressList);
+                        Toast.makeText(requireContext(), "Đã xóa địa chỉ!", Toast.LENGTH_SHORT).show();
+                        return;
                     }
-                    bindProfileData();
-                    syncDefaultAddressToBackend(prefManager.getAddress());
-                    Toast.makeText(requireContext(), "Đã xóa địa chỉ!", Toast.LENGTH_SHORT).show();
+
+                    apiService.deleteUserAddress(userId, addressId).enqueue(new Callback<Map<String, Object>>() {
+                        @Override
+                        public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                            if (!isAdded()) return;
+                            if (response.code() == 401) {
+                                if (parentSheet != null && parentSheet.isShowing()) parentSheet.dismiss();
+                                handleUnauthorizedSession();
+                                return;
+                            }
+                            if (response.isSuccessful() && applyAddressesFromResponse(response.body(), addressList, adapter)) {
+                                bindProfileData();
+                                Toast.makeText(requireContext(), "Đã xóa địa chỉ!", Toast.LENGTH_SHORT).show();
+                            } else {
+                                Toast.makeText(requireContext(), extractErrorMessage(response, "Không thể xóa địa chỉ!"), Toast.LENGTH_SHORT).show();
+                            }
+                        }
+
+                        @Override
+                        public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                            if (!isAdded()) return;
+                            Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                        }
+                    });
                 })
                 .show();
-    }
-
-    private void syncDefaultAddressToBackend(String addressLine) {
-        Long userId = prefManager.getUserId();
-        if (userId == null || userId <= 0) return;
-        Map<String, Object> body = new HashMap<>();
-        body.put("address", addressLine != null ? addressLine : "");
-        apiService.updateProfile(userId, body).enqueue(new Callback<Map<String, Object>>() {
-            @Override
-            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
-                if (!isAdded()) return;
-                if (response.code() == 401) {
-                    handleUnauthorizedSession();
-                    return;
-                }
-                if (response.isSuccessful()) {
-                    applyAuthSessionFromResponse(response.body(), prefManager.isGoogleAccount());
-                    refreshAddressList();
-                } else {
-                    String errMsg = extractErrorMessage(response, "Không thể đồng bộ địa chỉ lên máy chủ!");
-                    Toast.makeText(requireContext(), errMsg, Toast.LENGTH_SHORT).show();
-                }
-            }
-
-            @Override
-            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
-                if (!isAdded()) return;
-                Toast.makeText(requireContext(), "Đã lưu địa chỉ trên máy, nhưng chưa đồng bộ được lên máy chủ.", Toast.LENGTH_SHORT).show();
-            }
-        });
     }
 
     private void showAddAddressDialog() {
@@ -1710,6 +1806,10 @@ public class AuthFragment extends Fragment {
                 Toast.makeText(requireContext(), "Vui lòng nhập đầy đủ thông tin!", Toast.LENGTH_SHORT).show();
                 return;
             }
+            if (name.length() > 100) {
+                Toast.makeText(requireContext(), "Tên người nhận không được vượt quá 100 ký tự!", Toast.LENGTH_SHORT).show();
+                return;
+            }
             if (address.length() > 255) {
                 Toast.makeText(requireContext(), "Địa chỉ không được vượt quá 255 ký tự!", Toast.LENGTH_SHORT).show();
                 return;
@@ -1721,39 +1821,121 @@ public class AuthFragment extends Fragment {
                 return;
             }
 
-            if (isEditMode) {
-                editingAddress.setReceiverName(name);
-                editingAddress.setPhone(normalizedPhone);
-                editingAddress.setAddressLine(address);
-                editingAddress.setTag(tag);
-                editingAddress.setDefault(isDefault);
-                prefManager.updateAddress(editingAddress);
-            } else {
-                UserAddress newAddr = new UserAddress(name, normalizedPhone, address, tag, isDefault);
-                prefManager.addAddress(newAddr);
+            Long userId = prefManager.getUserId();
+            if (userId == null || userId <= 0) {
+                dialog.dismiss();
+                if (parentSheet != null && parentSheet.isShowing()) parentSheet.dismiss();
+                handleUnauthorizedSession();
+                return;
             }
 
-            if (addressList != null) {
-                addressList.clear();
-                addressList.addAll(prefManager.getAddressList());
-            }
-            if (adapter != null) {
-                adapter.notifyDataSetChanged();
-            }
-            refreshAddressList();
+            final String defaultButtonText = isEditMode ? "Cập nhật" : "Lưu địa chỉ";
+            btnSave.setEnabled(false);
+            btnSave.setText("Đang lưu...");
+            btnCancel.setEnabled(false);
 
-            // Đồng bộ địa chỉ mặc định mới nhất lên Backend
-            syncDefaultAddressToBackend(prefManager.getAddress());
+            Map<String, Object> body = new HashMap<>();
+            body.put("receiverName", name);
+            body.put("phone", normalizedPhone);
+            body.put("addressLine", address);
+            body.put("tag", tag);
+            body.put("isDefault", isDefault);
 
-            dialog.dismiss();
-            Toast.makeText(
-                    requireContext(),
-                    isEditMode ? "Cập nhật địa chỉ thành công!" : "Thêm địa chỉ thành công!",
-                    Toast.LENGTH_SHORT
-            ).show();
+            Long existingAddressId = isEditMode ? parseServerAddressId(editingAddress) : null;
+            Call<Map<String, Object>> call = existingAddressId != null
+                    ? apiService.updateUserAddress(userId, existingAddressId, body)
+                    : apiService.addUserAddress(userId, body);
+
+            call.enqueue(new Callback<Map<String, Object>>() {
+                @Override
+                public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                    if (!isAdded() || !dialog.isShowing()) return;
+                    btnSave.setEnabled(true);
+                    btnSave.setText(defaultButtonText);
+                    btnCancel.setEnabled(true);
+
+                    if (response.code() == 401) {
+                        dialog.dismiss();
+                        if (parentSheet != null && parentSheet.isShowing()) parentSheet.dismiss();
+                        handleUnauthorizedSession();
+                        return;
+                    }
+                    if (response.isSuccessful() && applyAddressesFromResponse(response.body(), addressList, adapter)) {
+                        refreshAddressList();
+                        dialog.dismiss();
+                        Toast.makeText(
+                                requireContext(),
+                                isEditMode ? "Cập nhật địa chỉ thành công!" : "Thêm địa chỉ thành công!",
+                                Toast.LENGTH_SHORT
+                        ).show();
+                    } else {
+                        String errMsg = extractErrorMessage(response, "Không thể lưu địa chỉ lên máy chủ!");
+                        Toast.makeText(requireContext(), errMsg, Toast.LENGTH_SHORT).show();
+                    }
+                }
+
+                @Override
+                public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                    if (!isAdded() || !dialog.isShowing()) return;
+                    btnSave.setEnabled(true);
+                    btnSave.setText(defaultButtonText);
+                    btnCancel.setEnabled(true);
+                    Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            });
         });
 
         dialog.show();
+    }
+
+    private boolean applyAddressesFromResponse(
+            @Nullable Map<String, Object> body,
+            @Nullable List<UserAddress> targetList,
+            @Nullable AddressAdapter adapter) {
+        if (body == null || !(body.get("addresses") instanceof List)) {
+            return false;
+        }
+        List<UserAddress> parsedList = parseServerAddressList((List<?>) body.get("addresses"));
+        prefManager.replaceAddressListFromServer(parsedList);
+        if (targetList != null) {
+            targetList.clear();
+            targetList.addAll(prefManager.getAddressList());
+        }
+        if (adapter != null) {
+            adapter.notifyDataSetChanged();
+        }
+        return true;
+    }
+
+    private List<UserAddress> parseServerAddressList(List<?> rawList) {
+        List<UserAddress> result = new ArrayList<>();
+        for (Object item : rawList) {
+            if (!(item instanceof Map)) continue;
+            Map<?, ?> map = (Map<?, ?>) item;
+            Object idObj = map.get("id");
+            String id = idObj instanceof Number
+                    ? String.valueOf(((Number) idObj).longValue())
+                    : (idObj != null ? idObj.toString() : null);
+            String receiverName = map.get("receiverName") != null ? map.get("receiverName").toString() : "";
+            String phone = map.get("phone") != null ? map.get("phone").toString() : "";
+            String addressLine = map.get("addressLine") != null ? map.get("addressLine").toString() : "";
+            String tag = map.get("tag") != null ? map.get("tag").toString() : "🏠 Nhà riêng";
+            Object defaultObj = map.get("isDefault") != null ? map.get("isDefault") : map.get("default");
+            boolean isDefault = Boolean.TRUE.equals(defaultObj);
+            result.add(new UserAddress(id, receiverName, phone, addressLine, tag, isDefault));
+        }
+        return result;
+    }
+
+    @Nullable
+    private Long parseServerAddressId(@Nullable UserAddress address) {
+        if (address == null || address.getId() == null) return null;
+        try {
+            long parsed = Long.parseLong(address.getId().trim());
+            return parsed > 0 ? parsed : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private void showChangePasswordDialog() {

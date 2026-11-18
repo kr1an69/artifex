@@ -2,6 +2,8 @@ package com.artifex.backend.controller;
 
 import com.artifex.backend.dto.AuthDTO.*;
 import com.artifex.backend.entity.User;
+import com.artifex.backend.entity.UserAddress;
+import com.artifex.backend.repository.UserAddressRepository;
 import com.artifex.backend.repository.UserRepository;
 import com.artifex.backend.service.PasswordUtils;
 import com.artifex.backend.service.PhoneUtils;
@@ -10,6 +12,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartFile;
@@ -21,7 +24,10 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.format.ResolverStyle;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -40,6 +46,8 @@ public class UserController {
     private static final int MAX_ADDRESS_LENGTH = 255;
     private static final int MAX_DOB_LENGTH = 20;
     private static final int MAX_GENDER_LENGTH = 20;
+    private static final int MAX_ADDRESS_TAG_LENGTH = 40;
+    private static final String DEFAULT_ADDRESS_TAG = "🏠 Nhà riêng";
     private static final Set<String> ALLOWED_GENDERS = Set.of("Nam", "Nữ", "Khác");
     private static final DateTimeFormatter DOB_FORMATTER = DateTimeFormatter
             .ofPattern("dd/MM/uuuu")
@@ -52,6 +60,7 @@ public class UserController {
     );
 
     private final UserRepository userRepository;
+    private final UserAddressRepository userAddressRepository;
     private final com.artifex.backend.service.TokenService tokenService;
     private final com.artifex.backend.service.CloudinaryService cloudinaryService;
 
@@ -197,6 +206,10 @@ public class UserController {
             response.put("status", "ERROR");
             response.put("message", "Số điện thoại hoặc Email đã được sử dụng bởi tài khoản khác!");
             return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+        }
+
+        if (request.getAddress() != null) {
+            syncDefaultAddressFromUserProfile(updatedUser != null ? updatedUser : user, request.getAddress().trim());
         }
 
         response.put("status", "SUCCESS");
@@ -346,6 +359,342 @@ public class UserController {
         response.put("message", "Đổi mật khẩu thành công!");
         response.put("token", newToken);
         return ResponseEntity.ok(response);
+    }
+
+    // ==================== QUẢN LÝ SỔ ĐỊA CHỈ (ĐỒNG BỘ MYSQL) ====================
+
+    @GetMapping("/{id}/addresses")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> getUserAddresses(@PathVariable Long id,
+                                                                @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        AuthorizedUser auth = authorizeAndLoadUser(id, authHeader);
+        if (auth.errorResponse() != null) return auth.errorResponse();
+
+        List<UserAddress> addresses = loadOrMigrateAddresses(auth.user());
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("status", "SUCCESS");
+        response.put("addresses", toAddressMapList(addresses));
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{id}/addresses")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> addUserAddress(@PathVariable Long id,
+                                                              @RequestHeader(value = "Authorization", required = false) String authHeader,
+                                                              @RequestBody UserAddressRequest request) {
+        AuthorizedUser auth = authorizeAndLoadUser(id, authHeader);
+        if (auth.errorResponse() != null) return auth.errorResponse();
+        if (request == null) {
+            return addressError(HttpStatus.BAD_REQUEST, "Vui lòng nhập đầy đủ thông tin địa chỉ!");
+        }
+
+        String receiverName = request.getReceiverName() != null ? request.getReceiverName().trim() : "";
+        String rawPhone = request.getPhone() != null ? request.getPhone().trim() : "";
+        String addressLine = request.getAddressLine() != null ? request.getAddressLine().trim() : "";
+        String tag = normalizeAddressTag(request.getTag());
+
+        if (receiverName.isEmpty() || rawPhone.isEmpty() || addressLine.isEmpty()) {
+            return addressError(HttpStatus.BAD_REQUEST, "Vui lòng nhập đầy đủ thông tin người nhận, số điện thoại và địa chỉ!");
+        }
+        if (receiverName.length() > MAX_FULL_NAME_LENGTH) {
+            return addressError(HttpStatus.BAD_REQUEST, "Tên người nhận không được vượt quá " + MAX_FULL_NAME_LENGTH + " ký tự!");
+        }
+        if (!PhoneUtils.isPhoneNumber(rawPhone)) {
+            return addressError(HttpStatus.BAD_REQUEST, "Số điện thoại người nhận không hợp lệ! Vui lòng nhập đúng 10 số (ví dụ: 09xxxxxxxx).");
+        }
+        if (addressLine.length() > MAX_ADDRESS_LENGTH) {
+            return addressError(HttpStatus.BAD_REQUEST, "Địa chỉ không được vượt quá " + MAX_ADDRESS_LENGTH + " ký tự!");
+        }
+        if (tag.length() > MAX_ADDRESS_TAG_LENGTH) {
+            return addressError(HttpStatus.BAD_REQUEST, "Nhãn địa chỉ không được vượt quá " + MAX_ADDRESS_TAG_LENGTH + " ký tự!");
+        }
+
+        User user = auth.user();
+        List<UserAddress> existing = new ArrayList<>(loadOrMigrateAddresses(user));
+        boolean shouldBeDefault = existing.isEmpty() || Boolean.TRUE.equals(request.getIsDefault());
+
+        if (shouldBeDefault) {
+            for (UserAddress item : existing) {
+                if (item.isDefaultAddress()) {
+                    item.setDefaultAddress(false);
+                    userAddressRepository.save(item);
+                }
+            }
+        }
+
+        UserAddress newAddress = UserAddress.builder()
+                .user(user)
+                .receiverName(receiverName)
+                .phone(PhoneUtils.toDomesticVietnamPhone(rawPhone))
+                .addressLine(addressLine)
+                .tag(tag)
+                .defaultAddress(shouldBeDefault)
+                .build();
+        UserAddress savedAddress = userAddressRepository.save(newAddress);
+        if (savedAddress == null) {
+            savedAddress = newAddress;
+        }
+        existing.add(0, savedAddress);
+        sortAddressesDefaultFirst(existing);
+
+        User savedUser = syncUserDefaultAddressColumn(user, existing);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("status", "SUCCESS");
+        response.put("message", "Thêm địa chỉ thành công!");
+        response.put("address", toAddressMap(savedAddress));
+        response.put("addresses", toAddressMapList(existing));
+        response.put("user", savedUser);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PutMapping("/{id}/addresses/{addressId}")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> updateUserAddress(@PathVariable Long id,
+                                                                 @PathVariable Long addressId,
+                                                                 @RequestHeader(value = "Authorization", required = false) String authHeader,
+                                                                 @RequestBody UserAddressRequest request) {
+        AuthorizedUser auth = authorizeAndLoadUser(id, authHeader);
+        if (auth.errorResponse() != null) return auth.errorResponse();
+        if (request == null) {
+            return addressError(HttpStatus.BAD_REQUEST, "Dữ liệu cập nhật địa chỉ không hợp lệ!");
+        }
+
+        User user = auth.user();
+        Optional<UserAddress> targetOpt = userAddressRepository.findByIdAndUserId(addressId, user.getId());
+        if (targetOpt.isEmpty()) {
+            return addressError(HttpStatus.NOT_FOUND, "Không tìm thấy địa chỉ cần cập nhật!");
+        }
+        UserAddress target = targetOpt.get();
+
+        if (request.getReceiverName() != null) {
+            String receiverName = request.getReceiverName().trim();
+            if (receiverName.isEmpty()) {
+                return addressError(HttpStatus.BAD_REQUEST, "Tên người nhận không được để trống!");
+            }
+            if (receiverName.length() > MAX_FULL_NAME_LENGTH) {
+                return addressError(HttpStatus.BAD_REQUEST, "Tên người nhận không được vượt quá " + MAX_FULL_NAME_LENGTH + " ký tự!");
+            }
+            target.setReceiverName(receiverName);
+        }
+        if (request.getPhone() != null) {
+            String rawPhone = request.getPhone().trim();
+            if (rawPhone.isEmpty() || !PhoneUtils.isPhoneNumber(rawPhone)) {
+                return addressError(HttpStatus.BAD_REQUEST, "Số điện thoại người nhận không hợp lệ! Vui lòng nhập đúng 10 số (ví dụ: 09xxxxxxxx).");
+            }
+            target.setPhone(PhoneUtils.toDomesticVietnamPhone(rawPhone));
+        }
+        if (request.getAddressLine() != null) {
+            String addressLine = request.getAddressLine().trim();
+            if (addressLine.isEmpty()) {
+                return addressError(HttpStatus.BAD_REQUEST, "Địa chỉ chi tiết không được để trống!");
+            }
+            if (addressLine.length() > MAX_ADDRESS_LENGTH) {
+                return addressError(HttpStatus.BAD_REQUEST, "Địa chỉ không được vượt quá " + MAX_ADDRESS_LENGTH + " ký tự!");
+            }
+            target.setAddressLine(addressLine);
+        }
+        if (request.getTag() != null) {
+            String tag = normalizeAddressTag(request.getTag());
+            if (tag.length() > MAX_ADDRESS_TAG_LENGTH) {
+                return addressError(HttpStatus.BAD_REQUEST, "Nhãn địa chỉ không được vượt quá " + MAX_ADDRESS_TAG_LENGTH + " ký tự!");
+            }
+            target.setTag(tag);
+        }
+
+        List<UserAddress> allAddresses = new ArrayList<>(safeFindUserAddresses(user.getId()));
+        if (allAddresses.stream().noneMatch(a -> addressId.equals(a.getId()))) {
+            allAddresses.add(target);
+        }
+
+        if (Boolean.TRUE.equals(request.getIsDefault()) || allAddresses.size() == 1) {
+            for (UserAddress item : allAddresses) {
+                boolean isTarget = item == target || addressId.equals(item.getId());
+                if (item.isDefaultAddress() != isTarget) {
+                    item.setDefaultAddress(isTarget);
+                    userAddressRepository.save(item);
+                }
+            }
+            target.setDefaultAddress(true);
+        } else if (Boolean.FALSE.equals(request.getIsDefault()) && target.isDefaultAddress()) {
+            target.setDefaultAddress(false);
+            userAddressRepository.save(target);
+            for (UserAddress item : allAddresses) {
+                if (item != target && !addressId.equals(item.getId())) {
+                    item.setDefaultAddress(true);
+                    userAddressRepository.save(item);
+                    break;
+                }
+            }
+        } else {
+            userAddressRepository.save(target);
+        }
+
+        ensureSingleDefaultAddress(allAddresses);
+        sortAddressesDefaultFirst(allAddresses);
+        User savedUser = syncUserDefaultAddressColumn(user, allAddresses);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("status", "SUCCESS");
+        response.put("message", "Cập nhật địa chỉ thành công!");
+        response.put("address", toAddressMap(target));
+        response.put("addresses", toAddressMapList(allAddresses));
+        response.put("user", savedUser);
+        return ResponseEntity.ok(response);
+    }
+
+    @DeleteMapping("/{id}/addresses/{addressId}")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> deleteUserAddress(@PathVariable Long id,
+                                                                 @PathVariable Long addressId,
+                                                                 @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        AuthorizedUser auth = authorizeAndLoadUser(id, authHeader);
+        if (auth.errorResponse() != null) return auth.errorResponse();
+
+        User user = auth.user();
+        Optional<UserAddress> targetOpt = userAddressRepository.findByIdAndUserId(addressId, user.getId());
+        if (targetOpt.isEmpty()) {
+            return addressError(HttpStatus.NOT_FOUND, "Không tìm thấy địa chỉ cần xóa!");
+        }
+
+        UserAddress target = targetOpt.get();
+        userAddressRepository.delete(target);
+
+        List<UserAddress> remaining = new ArrayList<>(safeFindUserAddresses(user.getId()));
+        remaining.removeIf(item -> item == target || addressId.equals(item.getId()));
+        ensureSingleDefaultAddress(remaining);
+        sortAddressesDefaultFirst(remaining);
+        User savedUser = syncUserDefaultAddressColumn(user, remaining);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("status", "SUCCESS");
+        response.put("message", "Đã xóa địa chỉ!");
+        response.put("addresses", toAddressMapList(remaining));
+        response.put("user", savedUser);
+        return ResponseEntity.ok(response);
+    }
+
+    private List<UserAddress> loadOrMigrateAddresses(User user) {
+        List<UserAddress> existing = new ArrayList<>(safeFindUserAddresses(user.getId()));
+        if (existing.isEmpty() && user.getAddress() != null && !user.getAddress().trim().isEmpty()) {
+            UserAddress migrated = UserAddress.builder()
+                    .user(user)
+                    .receiverName(user.getFullName() != null && !user.getFullName().isBlank() ? user.getFullName().trim() : "Khách hàng")
+                    .phone(user.getPhone() != null ? user.getPhone().trim() : "")
+                    .addressLine(user.getAddress().trim())
+                    .tag(DEFAULT_ADDRESS_TAG)
+                    .defaultAddress(true)
+                    .build();
+            UserAddress saved = userAddressRepository.save(migrated);
+            existing.add(saved != null ? saved : migrated);
+        }
+        ensureSingleDefaultAddress(existing);
+        sortAddressesDefaultFirst(existing);
+        return existing;
+    }
+
+    private void syncDefaultAddressFromUserProfile(User user, String trimmedAddress) {
+        if (user == null || user.getId() == null) return;
+        List<UserAddress> existing = new ArrayList<>(safeFindUserAddresses(user.getId()));
+        if (trimmedAddress.isEmpty()) {
+            return;
+        }
+        if (existing.isEmpty()) {
+            UserAddress created = UserAddress.builder()
+                    .user(user)
+                    .receiverName(user.getFullName() != null && !user.getFullName().isBlank() ? user.getFullName().trim() : "Khách hàng")
+                    .phone(user.getPhone() != null ? user.getPhone().trim() : "")
+                    .addressLine(trimmedAddress)
+                    .tag(DEFAULT_ADDRESS_TAG)
+                    .defaultAddress(true)
+                    .build();
+            userAddressRepository.save(created);
+            return;
+        }
+        UserAddress target = existing.stream()
+                .filter(UserAddress::isDefaultAddress)
+                .findFirst()
+                .orElse(existing.get(0));
+        if (!trimmedAddress.equals(target.getAddressLine()) || !target.isDefaultAddress()) {
+            target.setAddressLine(trimmedAddress);
+            target.setDefaultAddress(true);
+            userAddressRepository.save(target);
+        }
+    }
+
+    private List<UserAddress> safeFindUserAddresses(Long userId) {
+        List<UserAddress> list = userAddressRepository.findByUserIdOrderByDefaultAddressDescIdDesc(userId);
+        return list != null ? list : List.of();
+    }
+
+    private void ensureSingleDefaultAddress(List<UserAddress> addresses) {
+        if (addresses.isEmpty()) return;
+        boolean foundDefault = false;
+        for (UserAddress addr : addresses) {
+            if (addr.isDefaultAddress()) {
+                if (!foundDefault) {
+                    foundDefault = true;
+                } else {
+                    addr.setDefaultAddress(false);
+                    userAddressRepository.save(addr);
+                }
+            }
+        }
+        if (!foundDefault) {
+            UserAddress first = addresses.get(0);
+            first.setDefaultAddress(true);
+            userAddressRepository.save(first);
+        }
+    }
+
+    private void sortAddressesDefaultFirst(List<UserAddress> addresses) {
+        addresses.sort(Comparator
+                .comparing(UserAddress::isDefaultAddress, Comparator.reverseOrder())
+                .thenComparing(a -> a.getId() != null ? a.getId() : 0L, Comparator.reverseOrder()));
+    }
+
+    private User syncUserDefaultAddressColumn(User user, List<UserAddress> addresses) {
+        String defaultAddressLine = addresses.stream()
+                .filter(UserAddress::isDefaultAddress)
+                .map(UserAddress::getAddressLine)
+                .findFirst()
+                .orElse(addresses.isEmpty() ? null : addresses.get(0).getAddressLine());
+        user.setAddress(defaultAddressLine);
+        User saved = userRepository.save(user);
+        return saved != null ? saved : user;
+    }
+
+    private String normalizeAddressTag(String rawTag) {
+        if (rawTag == null || rawTag.trim().isEmpty()) {
+            return DEFAULT_ADDRESS_TAG;
+        }
+        return rawTag.trim();
+    }
+
+    private List<Map<String, Object>> toAddressMapList(List<UserAddress> addresses) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (UserAddress addr : addresses) {
+            list.add(toAddressMap(addr));
+        }
+        return list;
+    }
+
+    private Map<String, Object> toAddressMap(UserAddress addr) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", addr.getId());
+        map.put("receiverName", addr.getReceiverName());
+        map.put("phone", addr.getPhone());
+        map.put("addressLine", addr.getAddressLine());
+        map.put("tag", addr.getTag());
+        map.put("isDefault", addr.isDefaultAddress());
+        return map;
+    }
+
+    private ResponseEntity<Map<String, Object>> addressError(HttpStatus status, String message) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("status", "ERROR");
+        response.put("message", message);
+        return ResponseEntity.status(status).body(response);
     }
 
     /**
