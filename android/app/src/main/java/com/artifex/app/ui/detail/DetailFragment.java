@@ -33,6 +33,7 @@ import com.artifex.app.api.RetrofitClient;
 import com.artifex.app.data.local.AppDatabase;
 import com.artifex.app.data.local.CartDao;
 import com.artifex.app.data.local.CartItem;
+import com.artifex.app.data.local.CartRepository;
 import com.artifex.app.data.model.ProductRatingSummary;
 import com.artifex.app.data.model.ReviewRequest;
 import com.artifex.app.data.model.ReviewResponse;
@@ -477,55 +478,24 @@ public class DetailFragment extends Fragment {
         if (!isAdded() || getContext() == null) return;
         final Context appContext = requireContext().getApplicationContext();
 
-        new Thread(() -> {
-            try {
-                CartDao cartDao = AppDatabase.getInstance(appContext).cartDao();
-                List<CartItem> currentItems = cartDao.getAllCartItems();
-                CartItem existing = null;
-                if (currentItems != null) {
-                    for (CartItem item : currentItems) {
-                        if (item.getProductId() == (int) currentProductId) {
-                            existing = item;
-                            break;
-                        }
-                    }
-                }
+        CartItem newItem = new CartItem(
+                (int) currentProductId,
+                currentProductName,
+                currentProductPrice,
+                selectedQuantity,
+                currentProductImage
+        );
 
-                if (existing != null) {
-                    existing.setQuantity(existing.getQuantity() + selectedQuantity);
-                    cartDao.update(existing);
-                } else {
-                    CartItem newItem = new CartItem(
-                            (int) currentProductId,
-                            currentProductName,
-                            currentProductPrice,
-                            selectedQuantity,
-                            currentProductImage
-                    );
-                    cartDao.insert(newItem);
-                }
-
-                if (getActivity() != null) {
-                    getActivity().runOnUiThread(() -> {
-                        if (!isAdded()) return;
-                        Toast.makeText(appContext, "🛍️ Đã thêm " + selectedQuantity + "x " + currentProductName + " vào giỏ hàng!", Toast.LENGTH_SHORT).show();
-                        if (navigateToCart && getActivity() instanceof MainActivity) {
-                            BottomNavigationView nav = getActivity().findViewById(R.id.bottom_navigation);
-                            if (nav != null) {
-                                nav.setSelectedItemId(R.id.nav_cart);
-                            }
-                        }
-                    });
-                }
-            } catch (Exception e) {
-                if (getActivity() != null) {
-                    getActivity().runOnUiThread(() -> {
-                        if (!isAdded()) return;
-                        Toast.makeText(appContext, "Không thể thêm vào giỏ: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                    });
+        CartRepository.getInstance(appContext).addToCart(newItem, success -> {
+            if (!isAdded()) return;
+            Toast.makeText(appContext, "🛍️ Đã thêm " + selectedQuantity + "x " + currentProductName + " vào giỏ hàng!", Toast.LENGTH_SHORT).show();
+            if (navigateToCart && getActivity() instanceof MainActivity) {
+                BottomNavigationView nav = getActivity().findViewById(R.id.bottom_navigation);
+                if (nav != null) {
+                    nav.setSelectedItemId(R.id.nav_cart);
                 }
             }
-        }).start();
+        });
     }
 
     /**
