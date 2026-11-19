@@ -40,9 +40,9 @@
             android:layout_gravity="center_horizontal"
             android:layout_marginTop="8dp"
             android:gravity="center"
-            android:text="Mã xác thực OTP (6 chữ số) đã được gửi qua SMS đến số điện thoại của bạn."
+            android:text="Mã xác thực OTP (6 chữ số) đã được gửi qua SMS đến số điện thoại của bạn (Hiệu lực 3 phút)."
             android:textColor="@color/artifex_text_secondary"
-            android:textSize="13sp" />
+            android:textSize="12sp" />
 
         <TextView
             android:id="@+id/tvRegisterTargetPhone"

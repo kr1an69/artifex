@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/artifex_surface"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <!-- Handle bar -->
+        <View
+            android:layout_width="36dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="16dp"
+            android:background="@color/artifex_border" />
+
+        <!-- Header -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Bộ Lọc &amp; Sắp Xếp"
+                android:textColor="@color/artifex_text_primary"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btn_close_filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="8dp"
+                android:text="Đóng"
+                android:textColor="@color/artifex_text_secondary"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="16dp"
+            android:background="@color/artifex_border" />
+
+        <!-- Section 1: Sort Order -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Sắp xếp theo"
+            android:textColor="@color/artifex_text_primary"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <RadioGroup
+            android:id="@+id/rg_sort_order"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical">
+
+            <RadioButton
+                android:id="@+id/rb_sort_default"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:buttonTint="@color/artifex_primary"
+                android:checked="true"
+                android:text="Mặc định (Mới nhất)"
+                android:textColor="@color/artifex_text_primary"
+                android:textSize="14sp" />
+
+            <RadioButton
+                android:id="@+id/rb_sort_price_asc"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:buttonTint="@color/artifex_primary"
+                android:text="Giá: Thấp đến Cao"
+                android:textColor="@color/artifex_text_primary"
+                android:textSize="14sp" />
+
+            <RadioButton
+                android:id="@+id/rb_sort_price_desc"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:buttonTint="@color/artifex_primary"
+                android:text="Giá: Cao đến Thấp"
+                android:textColor="@color/artifex_text_primary"
+                android:textSize="14sp" />
+
+            <RadioButton
+                android:id="@+id/rb_sort_rating_desc"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:buttonTint="@color/artifex_primary"
+                android:text="Đánh giá cao nhất"
+                android:textColor="@color/artifex_text_primary"
+                android:textSize="14sp" />
+        </RadioGroup>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="16dp"
+            android:background="@color/artifex_border" />
+
+        <!-- Section 2: Price Range -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Khoảng giá"
+            android:textColor="@color/artifex_text_primary"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <RadioGroup
+            android:id="@+id/rg_price_range"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical">
+
+            <RadioButton
+                android:id="@+id/rb_price_all"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:buttonTint="@color/artifex_primary"
+                android:checked="true"
+                android:text="Tất cả mức giá"
+                android:textColor="@color/artifex_text_primary"
+                android:textSize="14sp" />
+
+            <RadioButton
+                android:id="@+id/rb_price_under_5m"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:buttonTint="@color/artifex_primary"
+                android:text="Dưới 5.000.000 đ"
+                android:textColor="@color/artifex_text_primary"
+                android:textSize="14sp" />
+
+            <RadioButton
+                android:id="@+id/rb_price_5m_to_15m"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:buttonTint="@color/artifex_primary"
+                android:text="Từ 5.000.000 đ - 15.000.000 đ"
+                android:textColor="@color/artifex_text_primary"
+                android:textSize="14sp" />
+
+            <RadioButton
+                android:id="@+id/rb_price_15m_to_30m"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:buttonTint="@color/artifex_primary"
+                android:text="Từ 15.000.000 đ - 30.000.000 đ"
+                android:textColor="@color/artifex_text_primary"
+                android:textSize="14sp" />
+
+            <RadioButton
+                android:id="@+id/rb_price_over_30m"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:buttonTint="@color/artifex_primary"
+                android:text="Trên 30.000.000 đ"
+                android:textColor="@color/artifex_text_primary"
+                android:textSize="14sp" />
+        </RadioGroup>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="16dp"
+            android:background="@color/artifex_border" />
+
+        <!-- Section 3: Stock & Promotion -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Tùy chọn bổ sung"
+            android:textColor="@color/artifex_text_primary"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <CheckBox
+            android:id="@+id/cb_in_stock_only"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:layout_marginTop="8dp"
+            android:buttonTint="@color/artifex_primary"
+            android:text="Chỉ hiển thị linh kiện còn hàng"
+            android:textColor="@color/artifex_text_primary"
+            android:textSize="14sp" />
+
+        <CheckBox
+            android:id="@+id/cb_discount_only"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:buttonTint="@color/artifex_primary"
+            android:text="Chỉ hiển thị linh kiện đang giảm giá"
+            android:textColor="@color/artifex_text_primary"
+            android:textSize="14sp" />
+
+        <!-- Bottom Action Buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_reset_filter"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:text="Thiết lập lại"
+                android:textColor="@color/artifex_text_primary"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                app:cornerRadius="12dp"
+                app:strokeColor="@color/artifex_border"
+                app:strokeWidth="1dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_apply_filter"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:backgroundTint="@color/artifex_primary"
+                android:text="Áp dụng"
+                android:textColor="@color/artifex_on_primary"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                app:cornerRadius="12dp" />
+        </LinearLayout>
+
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

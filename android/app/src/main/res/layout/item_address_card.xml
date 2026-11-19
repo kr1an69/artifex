@@ -128,7 +128,7 @@
                 android:layout_marginStart="8dp"
                 android:text="0901 234 567"
                 android:textColor="@color/artifex_text_secondary"
-                android:textSize="13sp" />
+                android:textSize="12sp" />
         </LinearLayout>
 
         <!-- Hàng 3: Icon Location + Địa chỉ chi tiết -->

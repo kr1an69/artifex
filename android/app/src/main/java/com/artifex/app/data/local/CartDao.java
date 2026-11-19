@@ -24,6 +24,23 @@ public interface CartDao {
     @Query("SELECT * FROM cart_items")
     List<CartItem> getAllCartItems();
 
+    @Query("SELECT * FROM cart_items WHERE productId = :productId LIMIT 1")
+    CartItem findByProductId(int productId);
+
+    @Query("UPDATE cart_items SET quantity = :quantity WHERE productId = :productId")
+    void updateQuantity(int productId, int quantity);
+
+    @Query("DELETE FROM cart_items WHERE productId = :productId")
+    void deleteByProductId(int productId);
+
+    // Tổng tiền toàn giỏ (0 nếu giỏ trống)
+    @Query("SELECT IFNULL(SUM(price * quantity), 0) FROM cart_items")
+    double getTotalPrice();
+
+    // Tổng số lượng sản phẩm (dùng cho badge giỏ hàng)
+    @Query("SELECT IFNULL(SUM(quantity), 0) FROM cart_items")
+    int getTotalQuantity();
+
     @Query("DELETE FROM cart_items")
     void clearCart();
 }

@@ -6,7 +6,7 @@
     android:layout_height="wrap_content"
     android:background="@drawable/bg_bottom_sheet_surface"
     android:orientation="vertical"
-    android:padding="20dp">
+    android:padding="24dp">
 
     <!-- Thanh kéo BottomSheet (Drag Handle) -->
     <View

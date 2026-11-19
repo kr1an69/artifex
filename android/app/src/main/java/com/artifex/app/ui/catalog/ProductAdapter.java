@@ -6,6 +6,7 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 import com.artifex.app.R;
 import com.bumptech.glide.Glide;
@@ -29,7 +30,7 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
     public ProductAdapter(List<CatalogFragment.ProductItem> products, OnProductClickListener listener) {
         this.products = products;
         this.listener = listener;
-        
+
         DecimalFormatSymbols symbols = new DecimalFormatSymbols(Locale.getDefault());
         symbols.setGroupingSeparator('.');
         priceFormatter = new DecimalFormat("#,### đ", symbols);
@@ -45,11 +46,14 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
     @Override
     public void onBindViewHolder(@NonNull ProductViewHolder holder, int position) {
         CatalogFragment.ProductItem product = products.get(position);
-        
+
         holder.tvProductName.setText(product.getName());
         holder.tvProductSpec.setText(product.getShortSpec());
         holder.tvProductPrice.setText(priceFormatter.format(product.getPrice()));
-        
+        holder.tvProductCategory.setText(product.getCategoryLabel());
+        holder.tvProductRating.setText(String.format(Locale.US, "★ %.1f", product.getRating()));
+
+        // Discount badge
         if (product.getDiscountBadge() != null && !product.getDiscountBadge().isEmpty()) {
             holder.cardBadge.setVisibility(View.VISIBLE);
             holder.tvBadge.setText(product.getDiscountBadge());
@@ -57,11 +61,22 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
             holder.cardBadge.setVisibility(View.GONE);
         }
 
-        // Tải ảnh qua Glide với placeholder
+        // Stock status badge
+        if (product.getStock() > 0) {
+            holder.tvStockStatus.setText("Còn hàng");
+            holder.tvStockStatus.setTextColor(
+                    ContextCompat.getColor(holder.itemView.getContext(), R.color.artifex_success));
+        } else {
+            holder.tvStockStatus.setText("Hết hàng");
+            holder.tvStockStatus.setTextColor(
+                    ContextCompat.getColor(holder.itemView.getContext(), R.color.artifex_error));
+        }
+
+        // Load image via Glide
         Glide.with(holder.itemView.getContext())
                 .load(product.getImageUrl())
-                .placeholder(R.color.artifex_border)
-                .error(R.color.artifex_border)
+                .placeholder(R.drawable.ic_nav_catalog)
+                .error(R.drawable.ic_nav_catalog)
                 .transform(new CenterCrop())
                 .into(holder.ivProduct);
 
@@ -86,6 +101,10 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
         ImageView ivProduct;
         MaterialCardView cardBadge;
         TextView tvBadge;
+        MaterialCardView cardStockBadge;
+        TextView tvStockStatus;
+        TextView tvProductCategory;
+        TextView tvProductRating;
         TextView tvProductName;
         TextView tvProductSpec;
         TextView tvProductPrice;
@@ -95,6 +114,10 @@ public class ProductAdapter extends RecyclerView.Adapter<ProductAdapter.ProductV
             ivProduct = itemView.findViewById(R.id.iv_product);
             cardBadge = itemView.findViewById(R.id.card_badge);
             tvBadge = itemView.findViewById(R.id.tv_badge);
+            cardStockBadge = itemView.findViewById(R.id.card_stock_badge);
+            tvStockStatus = itemView.findViewById(R.id.tv_stock_status);
+            tvProductCategory = itemView.findViewById(R.id.tv_product_category);
+            tvProductRating = itemView.findViewById(R.id.tv_product_rating);
             tvProductName = itemView.findViewById(R.id.tv_product_name);
             tvProductSpec = itemView.findViewById(R.id.tv_product_spec);
             tvProductPrice = itemView.findViewById(R.id.tv_product_price);
