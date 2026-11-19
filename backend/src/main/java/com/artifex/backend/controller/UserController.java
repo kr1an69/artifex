@@ -723,8 +723,7 @@ public class UserController {
         }
         User user = userOpt.get();
         if (session.getUserId().equals(user.getId())
-                && user.getTokenValidAfter() != null
-                && session.getIssuedAt() <= user.getTokenValidAfter()) {
+                && tokenService.isTokenRevokedForUser(session, user)) {
             Map<String, Object> response = new LinkedHashMap<>();
             response.put("status", "ERROR");
             response.put("message", "Phiên đăng nhập đã hết hiệu lực do mật khẩu vừa thay đổi. Vui lòng đăng nhập lại!");

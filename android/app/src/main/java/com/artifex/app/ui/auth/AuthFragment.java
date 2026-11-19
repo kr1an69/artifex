@@ -372,13 +372,13 @@ public class AuthFragment extends Fragment {
     }
 
     private void fetchLatestUserProfile() {
-        Long userId = prefManager.getUserId();
+        Long userId = prefManager.getLoggedInUserId();
         if (userId == null || userId <= 0) return;
 
         apiService.getUserProfile(userId).enqueue(new Callback<Map<String, Object>>() {
             @Override
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
-                if (!isAdded() || !prefManager.isLoggedIn() || !userId.equals(prefManager.getUserId())) return;
+                if (!isAdded() || !prefManager.isLoggedIn() || !userId.equals(prefManager.getLoggedInUserId())) return;
                 if (response.code() == 401) {
                     handleUnauthorizedSession();
                     return;
@@ -398,13 +398,13 @@ public class AuthFragment extends Fragment {
     private void fetchUserAddressesFromBackend(
             @Nullable AddressAdapter adapter,
             @Nullable List<UserAddress> addressList) {
-        Long userId = prefManager.getUserId();
+        Long userId = prefManager.getLoggedInUserId();
         if (userId == null || userId <= 0) return;
 
         apiService.getUserAddresses(userId).enqueue(new Callback<Map<String, Object>>() {
             @Override
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
-                if (!isAdded() || !prefManager.isLoggedIn() || !userId.equals(prefManager.getUserId())) return;
+                if (!isAdded() || !prefManager.isLoggedIn() || !userId.equals(prefManager.getLoggedInUserId())) return;
                 if (response.code() == 401) {
                     handleUnauthorizedSession();
                     return;
@@ -599,7 +599,7 @@ public class AuthFragment extends Fragment {
                 return;
             }
 
-            Long userId = prefManager.getUserId();
+            Long userId = prefManager.getLoggedInUserId();
             if (userId == null || userId <= 0) {
                 Toast.makeText(requireContext(), "Phiên đăng nhập không hợp lệ, vui lòng đăng nhập lại!", Toast.LENGTH_SHORT).show();
                 return;
@@ -1510,7 +1510,7 @@ public class AuthFragment extends Fragment {
 
     private void uploadAvatarToCloudinary(Uri imageUri) {
         if (!isAdded() || getView() == null || isUploadingAvatar) return;
-        Long userId = prefManager.getUserId();
+        Long userId = prefManager.getLoggedInUserId();
         if (userId == null || userId <= 0) {
             Toast.makeText(requireContext(), "Phiên đăng nhập không hợp lệ, vui lòng đăng nhập lại!", Toast.LENGTH_SHORT).show();
             return;
@@ -1521,19 +1521,22 @@ public class AuthFragment extends Fragment {
 
         // Nén/resize ảnh ở luồng nền rồi gửi qua Backend Spring Boot
         new Thread(() -> {
-            okhttp3.MultipartBody.Part filePart = CloudinaryHelper.prepareFilePart(appContext, imageUri, "file");
+            CloudinaryHelper.PrepareResult prepResult = CloudinaryHelper.prepareFilePartWithResult(appContext, imageUri, "file");
             mainHandler.post(() -> {
                 if (!isAdded() || getView() == null) {
                     isUploadingAvatar = false;
                     return;
                 }
-                if (filePart == null) {
+                if (prepResult.part == null) {
                     setAvatarUploadState(false);
-                    Toast.makeText(requireContext(), "Tệp ảnh không hợp lệ hoặc không thể đọc ảnh!", Toast.LENGTH_SHORT).show();
+                    String errMsg = (prepResult.errorMessage != null && !prepResult.errorMessage.isEmpty())
+                            ? prepResult.errorMessage
+                            : "Tệp ảnh không hợp lệ hoặc không thể đọc ảnh!";
+                    Toast.makeText(requireContext(), errMsg, Toast.LENGTH_LONG).show();
                     return;
                 }
 
-                apiService.uploadAvatarFile(userId, filePart).enqueue(new Callback<Map<String, Object>>() {
+                apiService.uploadAvatarFile(userId, prepResult.part).enqueue(new Callback<Map<String, Object>>() {
                     @Override
                     public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                         if (!isAdded() || getView() == null) {
@@ -1594,7 +1597,7 @@ public class AuthFragment extends Fragment {
         adapterHolder[0] = new AddressAdapter(addressList, new AddressAdapter.OnAddressListener() {
             @Override
             public void onSelect(UserAddress address) {
-                Long userId = prefManager.getUserId();
+                Long userId = prefManager.getLoggedInUserId();
                 if (userId == null || userId <= 0) {
                     bottomSheet.dismiss();
                     handleUnauthorizedSession();
@@ -1692,7 +1695,7 @@ public class AuthFragment extends Fragment {
                 .setMessage("Bạn có chắc chắn muốn xóa địa chỉ nhận hàng của \"" + address.getReceiverName() + "\" không?")
                 .setNegativeButton("Hủy", (dialog, which) -> dialog.dismiss())
                 .setPositiveButton("Xóa", (dialog, which) -> {
-                    Long userId = prefManager.getUserId();
+                    Long userId = prefManager.getLoggedInUserId();
                     if (userId == null || userId <= 0) {
                         if (parentSheet != null && parentSheet.isShowing()) parentSheet.dismiss();
                         handleUnauthorizedSession();
@@ -1821,7 +1824,7 @@ public class AuthFragment extends Fragment {
                 return;
             }
 
-            Long userId = prefManager.getUserId();
+            Long userId = prefManager.getLoggedInUserId();
             if (userId == null || userId <= 0) {
                 dialog.dismiss();
                 if (parentSheet != null && parentSheet.isShowing()) parentSheet.dismiss();
@@ -1991,7 +1994,7 @@ public class AuthFragment extends Fragment {
                 return;
             }
 
-            Long userId = prefManager.getUserId();
+            Long userId = prefManager.getLoggedInUserId();
             if (userId == null || userId <= 0) {
                 Toast.makeText(requireContext(), "Phiên đăng nhập không hợp lệ, vui lòng đăng nhập lại!", Toast.LENGTH_SHORT).show();
                 return;

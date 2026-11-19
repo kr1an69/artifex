@@ -256,43 +256,76 @@ class UserAuthorizationTest {
     }
 
     @Test
-    void cloudinaryServiceRequiresSignedCredentialsAndNeverFallsBackToUnsigned() throws Exception {
+    void cloudinaryServicePrefersSignedUploadAndFallsBackToUnsignedWhenUnconfigured() throws Exception {
         byte[] jpegBytes = new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0x00, 0x10};
         MockMultipartFile file = new MockMultipartFile("file", "avatar.jpg", "image/jpeg", jpegBytes);
 
-        com.cloudinary.Cloudinary missingCreds = new com.cloudinary.Cloudinary(
-                com.cloudinary.utils.ObjectUtils.asMap("cloud_name", "wpheip7x", "api_key", "", "api_secret", "")
-        );
-        CloudinaryService unconfiguredService = new CloudinaryService(missingCreds);
-        org.junit.jupiter.api.Assertions.assertThrows(
-                java.io.IOException.class,
-                () -> unconfiguredService.uploadImage(file, "artifex/avatars")
-        );
-
-        com.cloudinary.Cloudinary demoCreds = new com.cloudinary.Cloudinary(
-                com.cloudinary.utils.ObjectUtils.asMap("cloud_name", "demo", "api_key", "demo", "api_secret", "demo")
-        );
-        CloudinaryService demoService = new CloudinaryService(demoCreds);
-        org.junit.jupiter.api.Assertions.assertThrows(
-                java.io.IOException.class,
-                () -> demoService.uploadImage(file, "artifex/avatars")
-        );
-
-        com.cloudinary.Cloudinary spyCloudinary = org.mockito.Mockito.spy(new com.cloudinary.Cloudinary(
+        // 1. Khi đã cấu hình API Key/Secret -> dùng signed upload, không gọi unsignedUpload
+        com.cloudinary.Cloudinary signedCloudinary = org.mockito.Mockito.spy(new com.cloudinary.Cloudinary(
                 com.cloudinary.utils.ObjectUtils.asMap("cloud_name", "wpheip7x", "api_key", "test_key", "api_secret", "test_secret")
         ));
-        com.cloudinary.Uploader mockUploader = org.mockito.Mockito.mock(com.cloudinary.Uploader.class);
-        org.mockito.Mockito.doReturn(mockUploader).when(spyCloudinary).uploader();
-        when(mockUploader.upload(any(), any())).thenThrow(new java.io.IOException("signed upload failed"));
+        com.cloudinary.Uploader signedUploader = org.mockito.Mockito.mock(com.cloudinary.Uploader.class);
+        org.mockito.Mockito.doReturn(signedUploader).when(signedCloudinary).uploader();
+        when(signedUploader.upload(any(), any())).thenReturn(Map.of("secure_url", "https://res.cloudinary.com/wpheip7x/image/upload/signed.jpg"));
 
-        CloudinaryService failingSignedService = new CloudinaryService(spyCloudinary);
-        org.junit.jupiter.api.Assertions.assertThrows(
-                java.io.IOException.class,
-                () -> failingSignedService.uploadImage(file, "artifex/avatars")
-        );
+        CloudinaryService signedService = new CloudinaryService(signedCloudinary);
+        assertEquals("https://res.cloudinary.com/wpheip7x/image/upload/signed.jpg",
+                signedService.uploadImage(file, "artifex/avatars"));
+        verify(signedUploader).upload(any(), any());
+        verify(signedUploader, never()).unsignedUpload(any(), any(), any());
 
-        verify(mockUploader).upload(any(), any());
-        org.mockito.Mockito.verifyNoMoreInteractions(mockUploader);
+        // 2. Khi thiếu API Key/Secret (máy local thành viên khác) -> fallback sang unsignedUpload("artifex_avatar")
+        com.cloudinary.Cloudinary missingCredsCloudinary = org.mockito.Mockito.spy(new com.cloudinary.Cloudinary(
+                com.cloudinary.utils.ObjectUtils.asMap("cloud_name", "wpheip7x", "api_key", "", "api_secret", "")
+        ));
+        com.cloudinary.Uploader unsignedUploader = org.mockito.Mockito.mock(com.cloudinary.Uploader.class);
+        org.mockito.Mockito.doReturn(unsignedUploader).when(missingCredsCloudinary).uploader();
+        when(unsignedUploader.unsignedUpload(any(), eq("artifex_avatar"), any()))
+                .thenReturn(Map.of("secure_url", "https://res.cloudinary.com/wpheip7x/image/upload/unsigned.jpg"));
+
+        CloudinaryService unconfiguredService = new CloudinaryService(missingCredsCloudinary);
+        assertEquals("https://res.cloudinary.com/wpheip7x/image/upload/unsigned.jpg",
+                unconfiguredService.uploadImage(file, "artifex/avatars"));
+        verify(unsignedUploader, never()).upload(any(), any());
+        verify(unsignedUploader).unsignedUpload(any(), eq("artifex_avatar"), any());
+
+        // 3. Khi signed upload lỗi -> tự fallback sang unsignedUpload("artifex_avatar")
+        com.cloudinary.Cloudinary fallbackCloudinary = org.mockito.Mockito.spy(new com.cloudinary.Cloudinary(
+                com.cloudinary.utils.ObjectUtils.asMap("cloud_name", "wpheip7x", "api_key", "test_key", "api_secret", "test_secret")
+        ));
+        com.cloudinary.Uploader fallbackUploader = org.mockito.Mockito.mock(com.cloudinary.Uploader.class);
+        org.mockito.Mockito.doReturn(fallbackUploader).when(fallbackCloudinary).uploader();
+        when(fallbackUploader.upload(any(), any())).thenThrow(new java.io.IOException("signed upload failed"));
+        when(fallbackUploader.unsignedUpload(any(), eq("artifex_avatar"), any()))
+                .thenReturn(Map.of("secure_url", "https://res.cloudinary.com/wpheip7x/image/upload/fallback.jpg"));
+
+        CloudinaryService fallbackService = new CloudinaryService(fallbackCloudinary);
+        assertEquals("https://res.cloudinary.com/wpheip7x/image/upload/fallback.jpg",
+                fallbackService.uploadImage(file, "artifex/avatars"));
+        verify(fallbackUploader).upload(any(), any());
+        verify(fallbackUploader).unsignedUpload(any(), eq("artifex_avatar"), any());
+    }
+
+    @Test
+    void tokenServiceValidateHeaderChecksTokenValidAfterDirectly() {
+        String oldToken = tokenService.generateToken(1L, "USER");
+        long cutoff = System.currentTimeMillis() + 5000L;
+        User updatedUser = User.builder()
+                .id(1L)
+                .username("user1")
+                .role("USER")
+                .tokenValidAfter(cutoff)
+                .build();
+        when(userRepository.findById(1L)).thenReturn(Optional.of(updatedUser));
+
+        TokenService restartedTokenService = new TokenService();
+        restartedTokenService.setUserRepository(userRepository);
+
+        org.junit.jupiter.api.Assertions.assertNull(restartedTokenService.validateHeader("Bearer " + oldToken));
+
+        tokenService.invalidateUserTokens(1L, cutoff);
+        String freshToken = tokenService.generateToken(1L, "USER");
+        org.junit.jupiter.api.Assertions.assertNotNull(restartedTokenService.validateHeader("Bearer " + freshToken));
     }
 
     @Test

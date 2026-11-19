@@ -305,6 +305,16 @@ class PhoneAuthTest {
         verify(repository, never()).save(any());
     }
 
+    @Test
+    void unconfiguredTextBeeFallsBackToLocalDevConsoleOtp() {
+        stubUsers(List.of());
+        AuthController localDevController = new AuthController(repository, mock(FirebaseLoginService.class), tokenService);
+        var resp = localDevController.sendRegisterOtp(new RegisterOtpRequest("0987654321", "localdev@gmail.com"));
+        assertEquals(HttpStatus.OK, resp.getStatusCode());
+        assertEquals("SUCCESS", resp.getBody().get("status"));
+        assertEquals(true, resp.getBody().get("gatewaySent"));
+    }
+
     @SuppressWarnings("unchecked")
     private void seedOtp(String key, String code) throws Exception {
         Field field = AuthController.class.getDeclaredField("otpStorage");

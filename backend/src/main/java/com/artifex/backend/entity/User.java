@@ -33,7 +33,7 @@ public class User {
     @Column(name = "full_name", nullable = false, length = 100)
     private String fullName;
 
-    @Column(unique = true, length = 20)
+    @Column(length = 20)
     private String phone;
 
     private String address;

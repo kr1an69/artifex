@@ -1,5 +1,7 @@
 package com.artifex.backend.service;
 
+import com.artifex.backend.entity.User;
+import com.artifex.backend.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
@@ -45,8 +47,15 @@ public class TokenService {
     // Tương thích ngược với các token ngẫu nhiên cũ
     private final Map<String, TokenSession> legacyTokenStore = new ConcurrentHashMap<>();
 
+    @Autowired(required = false)
+    private UserRepository userRepository;
+
     public TokenService() {
         this(DEV_FALLBACK_SECRET);
+    }
+
+    public void setUserRepository(UserRepository userRepository) {
+        this.userRepository = userRepository;
     }
 
     public TokenService(String secretKey) {
@@ -157,6 +166,33 @@ public class TokenService {
     }
 
     /**
+     * Đối chiếu thời điểm phát hành token với cột {@code tokenValidAfter} trong DB của người dùng.
+     */
+    public boolean isTokenRevokedForUser(TokenSession session, User user) {
+        if (session == null || user == null) {
+            return true;
+        }
+        Long validAfter = user.getTokenValidAfter();
+        if (validAfter != null) {
+            if (user.getId() != null) {
+                userInvalidBefore.merge(user.getId(), validAfter, Math::max);
+            }
+            if (session.getIssuedAt() <= validAfter) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isRevokedInDatabase(TokenSession session) {
+        if (userRepository == null || session == null || session.getUserId() == null) {
+            return false;
+        }
+        User user = userRepository.findById(session.getUserId()).orElse(null);
+        return user != null && isTokenRevokedForUser(session, user);
+    }
+
+    /**
      * Kiểm tra chuỗi Authorization header (Bearer <token>).
      * Trả về TokenSession nếu chữ ký hợp lệ, chưa hết hạn và chưa bị thu hồi; ngược lại trả về null.
      */
@@ -209,7 +245,11 @@ public class TokenService {
                     return null;
                 }
 
-                return new TokenSession(userId, role, expiresAt, issuedAt);
+                TokenSession session = new TokenSession(userId, role, expiresAt, issuedAt);
+                if (isRevokedInDatabase(session)) {
+                    return null;
+                }
+                return session;
             } catch (Exception e) {
                 return null;
             }
@@ -224,6 +264,10 @@ public class TokenService {
             }
             Long invalidBefore = userInvalidBefore.get(legacySession.getUserId());
             if (invalidBefore != null && legacySession.getIssuedAt() <= invalidBefore) {
+                legacyTokenStore.remove(token);
+                return null;
+            }
+            if (isRevokedInDatabase(legacySession)) {
                 legacyTokenStore.remove(token);
                 return null;
             }

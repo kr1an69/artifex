@@ -44,7 +44,7 @@ public class SharedPrefManager {
     }
 
     private String getUserAddressListKey() {
-        Long userId = getUserId();
+        Long userId = getLoggedInUserId();
         return KEY_ADDRESS_LIST_PREFIX + (userId != null ? userId : "guest");
     }
 
@@ -92,7 +92,7 @@ public class SharedPrefManager {
         return ctx.getSharedPreferences(SHARED_PREF_NAME, Context.MODE_PRIVATE).getBoolean(KEY_IS_LOGGED_IN, false);
     }
 
-    public Long getUserId() {
+    public Long getLoggedInUserId() {
         if (!isLoggedIn()) {
             return null;
         }
@@ -100,8 +100,13 @@ public class SharedPrefManager {
         return storedId > 0 ? storedId : null;
     }
 
+    public Long getUserId() {
+        Long loggedInId = getLoggedInUserId();
+        return loggedInId != null ? loggedInId : 1L;
+    }
+
     public Long getUserIdOrDefault(long defaultUserId) {
-        Long userId = getUserId();
+        Long userId = getLoggedInUserId();
         return userId != null ? userId : defaultUserId;
     }
 

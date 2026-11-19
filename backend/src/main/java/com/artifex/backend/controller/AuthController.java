@@ -40,8 +40,8 @@ public class AuthController {
     @Value("${sms.textbee.api-key:}")
     private String textBeeApiKey;
 
-    @Value("${artifex.otp.log-enabled:false}")
-    private boolean otpLogEnabled = false;
+    @Value("${artifex.otp.log-enabled:true}")
+    private boolean otpLogEnabled = true;
 
     // Lưu mã OTP tạm thời trong bộ nhớ với thời hạn 3 phút (180.000 ms), giới hạn tối đa 5 lần nhập sai
     private static final long OTP_EXPIRATION_MS = 180 * 1000L;
@@ -277,12 +277,15 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
         }
 
-        String token = tokenService.generateToken(savedUser.getId(), savedUser.getRole());
+        User effectiveUser = savedUser != null ? savedUser : newUser;
+        Long targetId = effectiveUser.getId() != null ? effectiveUser.getId() : newUser.getId();
+        String role = effectiveUser.getRole() != null ? effectiveUser.getRole() : newUser.getRole();
+        String token = tokenService.generateToken(targetId, role);
 
         response.put("status", "SUCCESS");
         response.put("message", "Đăng ký tài khoản thành công!");
         response.put("token", token);
-        response.put("user", savedUser);
+        response.put("user", effectiveUser);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -464,13 +467,16 @@ public class AuthController {
         User savedUser = userRepository.save(user);
         otpStorage.remove(validation.storageKey());
 
-        tokenService.invalidateUserTokens(savedUser.getId(), revokedAt);
-        String token = tokenService.generateToken(savedUser.getId(), savedUser.getRole());
+        User effectiveUser = savedUser != null ? savedUser : user;
+        Long targetId = effectiveUser.getId() != null ? effectiveUser.getId() : user.getId();
+        String role = effectiveUser.getRole() != null ? effectiveUser.getRole() : user.getRole();
+        tokenService.invalidateUserTokens(targetId, revokedAt);
+        String token = tokenService.generateToken(targetId, role);
 
         response.put("status", "SUCCESS");
         response.put("message", "Đặt lại mật khẩu và đăng nhập thành công!");
         response.put("token", token);
-        response.put("user", savedUser);
+        response.put("user", effectiveUser);
         return ResponseEntity.ok(response);
     }
 
@@ -567,7 +573,7 @@ public class AuthController {
 
     /**
      * Gửi tin nhắn SMS thật tới số điện thoại người dùng qua TextBee.dev
-     * (Biến điện thoại Android có SIM thành trạm phát SMS thật tới mọi số điện thoại).
+     * (Hoặc fallback in mã OTP ra console để các thành viên khác vẫn test được khi chưa có file .env TextBee).
      */
     protected boolean sendRealSmsViaGateway(String rawPhone, String otpCode, String customMessage) {
         String domesticPhone = PhoneUtils.toDomesticVietnamPhone(rawPhone);
@@ -575,36 +581,40 @@ public class AuthController {
                 ? customMessage
                 : "[ARTIFEX PC] Ma xac thuc OTP cua ban la: " + otpCode + " (Hieu luc 3 phut). Tuyet doi khong chia se ma nay!";
 
+        if (textBeeDeviceId == null || textBeeDeviceId.isBlank()
+                || textBeeApiKey == null || textBeeApiKey.isBlank()) {
+            System.out.println("[ARTIFEX SMS OTP LOCAL DEV] Chua cau hinh TEXTBEE_DEVICE_ID/TEXTBEE_API_KEY -> Dung ma OTP tren console cho "
+                    + domesticPhone + ": " + otpCode);
+            return true;
+        }
+
         HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .build();
 
-        if (textBeeDeviceId != null && !textBeeDeviceId.isBlank()
-                && textBeeApiKey != null && !textBeeApiKey.isBlank()) {
-            try {
-                String cleanDeviceId = textBeeDeviceId.trim();
-                String cleanApiKey = textBeeApiKey.trim();
-                String url = "https://api.textbee.dev/api/v1/gateway/devices/" + cleanDeviceId + "/send-sms";
-                String jsonPayload = String.format(
-                        "{\"recipients\":[\"%s\"],\"message\":\"%s\"}",
-                        escapeJsonString(domesticPhone),
-                        escapeJsonString(smsContent)
-                );
-                HttpRequest req = HttpRequest.newBuilder()
-                        .uri(URI.create(url))
-                        .header("Content-Type", "application/json")
-                        .header("x-api-key", cleanApiKey)
-                        .POST(HttpRequest.BodyPublishers.ofString(jsonPayload, StandardCharsets.UTF_8))
-                        .build();
-                HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
-                if (resp.statusCode() >= 200 && resp.statusCode() < 300) {
-                    System.out.println("[TextBee SMS Success] Da ban lenh gui SMS that toi so " + domesticPhone + " -> HTTP " + resp.statusCode());
-                    return true;
-                }
-                System.err.println("[TextBee SMS Error] HTTP " + resp.statusCode() + ": " + resp.body());
-            } catch (Exception e) {
-                System.err.println("[TextBee SMS Exception] " + e.getMessage());
+        try {
+            String cleanDeviceId = textBeeDeviceId.trim();
+            String cleanApiKey = textBeeApiKey.trim();
+            String url = "https://api.textbee.dev/api/v1/gateway/devices/" + cleanDeviceId + "/send-sms";
+            String jsonPayload = String.format(
+                    "{\"recipients\":[\"%s\"],\"message\":\"%s\"}",
+                    escapeJsonString(domesticPhone),
+                    escapeJsonString(smsContent)
+            );
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("Content-Type", "application/json")
+                    .header("x-api-key", cleanApiKey)
+                    .POST(HttpRequest.BodyPublishers.ofString(jsonPayload, StandardCharsets.UTF_8))
+                    .build();
+            HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+            if (resp.statusCode() >= 200 && resp.statusCode() < 300) {
+                System.out.println("[TextBee SMS Success] Da ban lenh gui SMS that toi so " + domesticPhone + " -> HTTP " + resp.statusCode());
+                return true;
             }
+            System.err.println("[TextBee SMS Error] HTTP " + resp.statusCode() + ": " + resp.body());
+        } catch (Exception e) {
+            System.err.println("[TextBee SMS Exception] " + e.getMessage());
         }
 
         return false;

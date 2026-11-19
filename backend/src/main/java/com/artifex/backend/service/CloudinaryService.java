@@ -24,7 +24,8 @@ public class CloudinaryService {
     }
 
     /**
-     * Upload an image file to Cloudinary under the specified folder using signed upload.
+     * Upload an image file to Cloudinary under the specified folder using signed upload,
+     * falling back to unsigned upload ("artifex_avatar") when API key/secret are not configured locally.
      * Returns the secure public URL of the uploaded image.
      */
     public String uploadImage(MultipartFile file, String folder) throws IOException {
@@ -32,19 +33,32 @@ public class CloudinaryService {
             throw new IllegalArgumentException("File cannot be empty");
         }
 
-        if (!hasSignedCredentials()) {
-            throw new IOException("Cloudinary chưa được cấu hình API Key/Secret trên máy chủ.");
+        byte[] fileBytes = file.getBytes();
+        if (hasSignedCredentials()) {
+            try {
+                Map<?, ?> uploadResult = cloudinary.uploader().upload(
+                        fileBytes,
+                        ObjectUtils.asMap(
+                                "folder", folder,
+                                "resource_type", "image"
+                        )
+                );
+                return (String) uploadResult.get("secure_url");
+            } catch (Exception signedEx) {
+                System.err.println("[Cloudinary Signed Upload Fallback] " + signedEx.getMessage());
+            }
         }
 
         try {
-            Map<?, ?> uploadResult = cloudinary.uploader().upload(
-                    file.getBytes(),
+            Map<?, ?> unsignedResult = cloudinary.uploader().unsignedUpload(
+                    fileBytes,
+                    "artifex_avatar",
                     ObjectUtils.asMap(
                             "folder", folder,
                             "resource_type", "image"
                     )
             );
-            return (String) uploadResult.get("secure_url");
+            return (String) unsignedResult.get("secure_url");
         } catch (Exception e) {
             throw new IOException("Lỗi upload ảnh lên Cloudinary: " + e.getMessage(), e);
         }
