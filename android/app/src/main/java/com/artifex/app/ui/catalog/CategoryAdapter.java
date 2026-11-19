@@ -37,15 +37,21 @@ public class CategoryAdapter extends RecyclerView.Adapter<CategoryAdapter.Catego
     public void onBindViewHolder(@NonNull CategoryViewHolder holder, int position) {
         CatalogFragment.CategoryItem category = categories.get(position);
         holder.tvCategoryName.setText(category.getName());
-        
+
         if (selectedPosition == holder.getAdapterPosition()) {
-            holder.cardCategory.setCardBackgroundColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.artifex_primary));
-            holder.tvCategoryName.setTextColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.artifex_surface));
-            holder.cardCategory.setStrokeColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.artifex_primary));
+            holder.cardCategory.setCardBackgroundColor(
+                    ContextCompat.getColor(holder.itemView.getContext(), R.color.artifex_primary));
+            holder.tvCategoryName.setTextColor(
+                    ContextCompat.getColor(holder.itemView.getContext(), R.color.artifex_on_primary));
+            holder.cardCategory.setStrokeColor(
+                    ContextCompat.getColor(holder.itemView.getContext(), R.color.artifex_primary));
         } else {
-            holder.cardCategory.setCardBackgroundColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.artifex_surface));
-            holder.tvCategoryName.setTextColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.artifex_text_primary));
-            holder.cardCategory.setStrokeColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.artifex_border));
+            holder.cardCategory.setCardBackgroundColor(
+                    ContextCompat.getColor(holder.itemView.getContext(), R.color.artifex_surface));
+            holder.tvCategoryName.setTextColor(
+                    ContextCompat.getColor(holder.itemView.getContext(), R.color.artifex_text_primary));
+            holder.cardCategory.setStrokeColor(
+                    ContextCompat.getColor(holder.itemView.getContext(), R.color.artifex_border));
         }
 
         holder.itemView.setOnClickListener(v -> {
@@ -60,6 +66,13 @@ public class CategoryAdapter extends RecyclerView.Adapter<CategoryAdapter.Catego
                 }
             }
         });
+    }
+
+    public void setSelectedPosition(int position) {
+        int previousPos = this.selectedPosition;
+        this.selectedPosition = position;
+        notifyItemChanged(previousPos);
+        notifyItemChanged(this.selectedPosition);
     }
 
     @Override

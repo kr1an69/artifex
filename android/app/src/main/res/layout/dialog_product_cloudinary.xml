@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/artifex_surface"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <!-- Header -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Thêm Linh Kiện &amp; Ảnh Cloudinary"
+            android:textColor="@color/artifex_text_primary"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Chọn ảnh sản phẩm từ thiết bị để tải lên Cloudinary hoặc thêm nhanh linh kiện vào danh mục."
+            android:textColor="@color/artifex_text_secondary"
+            android:textSize="12sp" />
+
+        <!-- Image Preview Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_pick_image"
+            android:layout_width="match_parent"
+            android:layout_height="160dp"
+            android:layout_marginTop="16dp"
+            android:clickable="true"
+            android:focusable="true"
+            app:cardBackgroundColor="@color/artifex_surface_variant"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp"
+            app:strokeColor="@color/artifex_border"
+            app:strokeWidth="1dp">
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <ImageView
+                    android:id="@+id/iv_preview_product"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="centerCrop"
+                    android:contentDescription="Preview Image" />
+
+                <LinearLayout
+                    android:id="@+id/layout_pick_placeholder"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <ImageView
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        android:src="@android:drawable/ic_menu_gallery"
+                        app:tint="@color/artifex_primary"
+                        android:contentDescription="Gallery Icon" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="Chạm để chọn ảnh từ thư viện"
+                        android:textColor="@color/artifex_primary"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tv_cloudinary_status"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="Hỗ trợ JPG, PNG (Tự động đồng bộ Cloudinary)"
+                        android:textColor="@color/artifex_text_muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
+            </FrameLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Product Name Input -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Tên linh kiện"
+            android:textColor="@color/artifex_text_primary"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/et_new_product_name"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="6dp"
+            android:background="@color/artifex_surface_variant"
+            android:hint="VD: VGA ASUS ROG Strix RTX 4080 Super"
+            android:inputType="textCapWords"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:textColor="@color/artifex_text_primary"
+            android:textColorHint="@color/artifex_text_muted"
+            android:textSize="14sp" />
+
+        <!-- Specs Input -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Thông số kỹ thuật tóm tắt"
+            android:textColor="@color/artifex_text_primary"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/et_new_product_spec"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="6dp"
+            android:background="@color/artifex_surface_variant"
+            android:hint="VD: 16GB GDDR6X, 256-bit, PCIe 4.0"
+            android:inputType="text"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:textColor="@color/artifex_text_primary"
+            android:textColorHint="@color/artifex_text_muted"
+            android:textSize="14sp" />
+
+        <!-- Price Input -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Giá bán (VNĐ)"
+            android:textColor="@color/artifex_text_primary"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/et_new_product_price"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="6dp"
+            android:background="@color/artifex_surface_variant"
+            android:hint="VD: 32990000"
+            android:inputType="number"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:textColor="@color/artifex_text_primary"
+            android:textColorHint="@color/artifex_text_muted"
+            android:textSize="14sp" />
+
+        <!-- Action Buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_cancel_new_product"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:text="Hủy"
+                android:textColor="@color/artifex_text_primary"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                app:cornerRadius="12dp"
+                app:strokeColor="@color/artifex_border"
+                app:strokeWidth="1dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_save_new_product"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:backgroundTint="@color/artifex_primary"
+                android:text="Lưu linh kiện"
+                android:textColor="@color/artifex_on_primary"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                app:cornerRadius="12dp" />
+        </LinearLayout>
+
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>

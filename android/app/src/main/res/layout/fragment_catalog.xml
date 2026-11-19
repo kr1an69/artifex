@@ -7,12 +7,100 @@
     android:orientation="vertical"
     android:background="@color/artifex_bg">
 
-    <!-- Top Bar & Search -->
+    <!-- Brand Header Bar -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="16dp"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="4dp">
+
+        <ImageView
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:src="@drawable/ic_logo_light"
+            app:tint="@color/artifex_primary"
+            android:contentDescription="Artifex Logo" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/oxanium_bold"
+                android:text="ARTIFEX"
+                android:textColor="@color/artifex_text_primary"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Linh Kiện PC &amp; Gaming Gear"
+                android:textColor="@color/artifex_text_secondary"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <!-- Add Product / Upload Image Button (Cloudinary Demo) -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/btn_add_product_cloudinary"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginEnd="8dp"
+            android:clickable="true"
+            android:focusable="true"
+            app:cardBackgroundColor="@color/artifex_surface"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp"
+            app:strokeColor="@color/artifex_primary"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="+ Ảnh / SP"
+                    android:textColor="@color/artifex_primary"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Refresh Button -->
+        <ImageButton
+            android:id="@+id/btn_refresh_catalog"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_popup_sync"
+            app:tint="@color/artifex_text_secondary"
+            android:contentDescription="Làm mới danh mục" />
+    </LinearLayout>
+
+    <!-- Search & Filter Bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="12dp"
         android:gravity="center_vertical">
 
         <com.google.android.material.card.MaterialCardView
@@ -28,47 +116,85 @@
 
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
+                android:layout_height="48dp"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
                 android:paddingStart="12dp"
-                android:paddingEnd="12dp">
+                android:paddingEnd="8dp">
 
                 <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
                     android:src="@android:drawable/ic_menu_search"
                     app:tint="@color/artifex_text_muted"
-                    android:contentDescription="Search Icon"/>
+                    android:contentDescription="Search Icon" />
 
                 <EditText
                     android:id="@+id/edit_search"
-                    android:layout_width="match_parent"
-                    android:layout_height="48dp"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
                     android:layout_marginStart="8dp"
                     android:background="@null"
-                    android:hint="Tìm kiếm linh kiện..."
+                    android:hint="Tìm CPU, RTX 4090, RAM DDR5..."
                     android:textColorHint="@color/artifex_text_muted"
                     android:textColor="@color/artifex_text_primary"
                     android:textSize="14sp"
                     android:inputType="text"
+                    android:imeOptions="actionSearch"
                     android:maxLines="1" />
+
+                <ImageButton
+                    android:id="@+id/btn_clear_search"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@android:drawable/ic_menu_close_clear_cancel"
+                    app:tint="@color/artifex_text_muted"
+                    android:visibility="gone"
+                    android:contentDescription="Xóa tìm kiếm" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Filter Button -->
-        <ImageButton
-            android:id="@+id/btn_filter"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginStart="12dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_menu_sort_by_size"
-            app:tint="@color/artifex_primary"
-            android:contentDescription="Lọc" />
+        <!-- Filter Button Card -->
+        <FrameLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp">
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                app:cardBackgroundColor="@color/artifex_surface"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="0dp"
+                app:strokeColor="@color/artifex_border"
+                app:strokeWidth="1dp">
+
+                <ImageButton
+                    android:id="@+id/btn_filter"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@android:drawable/ic_menu_sort_by_size"
+                    app:tint="@color/artifex_primary"
+                    android:contentDescription="Mở bộ lọc" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Active Filter Dot Indicator -->
+            <View
+                android:id="@+id/view_filter_dot"
+                android:layout_width="10dp"
+                android:layout_height="10dp"
+                android:layout_gravity="top|end"
+                android:layout_marginTop="4dp"
+                android:layout_marginEnd="4dp"
+                android:background="@drawable/bg_circle_primary"
+                android:visibility="gone" />
+        </FrameLayout>
     </LinearLayout>
 
-    <!-- Categories -->
+    <!-- Categories Horizontal Chips -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv_categories"
         android:layout_width="match_parent"
@@ -79,20 +205,146 @@
         android:paddingBottom="8dp"
         android:orientation="horizontal"
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
-        tools:listitem="@layout/item_category"/>
+        tools:listitem="@layout/item_category" />
 
-    <!-- Product Grid -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/rv_products"
+    <!-- Result Count & Active Filter Status Bar -->
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:clipToPadding="false"
-        android:paddingStart="12dp"
-        android:paddingEnd="12dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="16dp"
-        app:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
-        app:spanCount="2"
-        tools:listitem="@layout/item_product_card"/>
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="4dp">
+
+        <TextView
+            android:id="@+id/tv_result_count"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Hiển thị 8 linh kiện"
+            android:textColor="@color/artifex_text_secondary"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tv_active_filter_info"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Mặc định"
+            android:textColor="@color/artifex_primary"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/btn_quick_reset_filter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="• Đặt lại"
+            android:textColor="@color/artifex_accent"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- Main Content Container: Product Grid / Loading / Empty State -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <!-- Product Grid (2 Columns) -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rv_products"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="16dp"
+            app:layoutManager="androidx.recyclerview.widget.GridLayoutManager"
+            app:spanCount="2"
+            tools:listitem="@layout/item_product_card" />
+
+        <!-- Loading State -->
+        <LinearLayout
+            android:id="@+id/layout_loading"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <ProgressBar
+                android:id="@+id/progress_loading"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:indeterminateTint="@color/artifex_primary" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Đang tải danh mục linh kiện..."
+                android:textColor="@color/artifex_text_secondary"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <!-- Empty State View -->
+        <LinearLayout
+            android:id="@+id/layout_empty_state"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="24dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:src="@drawable/ic_nav_catalog"
+                app:tint="@color/artifex_text_muted"
+                android:contentDescription="Empty Catalog Icon" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="Không tìm thấy linh kiện phù hợp"
+                android:textColor="@color/artifex_text_primary"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tv_empty_subtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center"
+                android:text="Thử tìm kiếm với từ khóa khác hoặc đặt lại bộ lọc của bạn."
+                android:textColor="@color/artifex_text_secondary"
+                android:textSize="14sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_empty_reset"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginTop="16dp"
+                android:backgroundTint="@color/artifex_primary"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:text="Đặt lại bộ lọc"
+                android:textColor="@color/artifex_on_primary"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                app:cornerRadius="12dp" />
+        </LinearLayout>
+
+    </FrameLayout>
 
 </LinearLayout>

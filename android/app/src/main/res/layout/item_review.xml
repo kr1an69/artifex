@@ -48,6 +48,30 @@
                     android:textStyle="bold"
                     tools:text="Nguyễn Văn A" />
 
+                <!-- Badge: Đã mua hàng tại Artifex (Shopee Verified Purchase) -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="12dp"
+                        android:layout_height="12dp"
+                        android:contentDescription="Verified"
+                        android:src="@drawable/ic_verified" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:text="Đã mua hàng tại Artifex"
+                        android:textColor="@color/artifex_success"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
                 <TextView
                     android:id="@+id/tvReviewDate"
                     android:layout_width="wrap_content"
@@ -100,9 +124,51 @@
                 android:id="@+id/imgReview"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:scaleType="centerCrop"
-                android:contentDescription="Review Image" />
+                android:contentDescription="Review Image"
+                android:scaleType="centerCrop" />
         </com.google.android.material.card.MaterialCardView>
+
+        <!-- Footer: Nút Đánh giá Hữu ích (Shopee Helpful Review Action) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <LinearLayout
+                android:id="@+id/btnHelpful"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_badge_pill"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="5dp">
+
+                <ImageView
+                    android:id="@+id/ivHelpfulIcon"
+                    android:layout_width="14dp"
+                    android:layout_height="14dp"
+                    android:contentDescription="Helpful"
+                    android:src="@drawable/ic_thumb_up" />
+
+                <TextView
+                    android:id="@+id/tvHelpfulCount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="Hữu ích"
+                    android:textColor="@color/artifex_text_secondary"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </LinearLayout>
 
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>
