@@ -1,5 +1,7 @@
 package com.artifex.backend.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -78,9 +80,31 @@ public class AuthDTO {
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
+    public static class ForgotPasswordVerifyOtpRequest {
+        private String phone;
+        private String otp;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class ForgotPasswordRequest {
         private String phone;
         private String otp;
         private String newPassword;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class UserAddressRequest {
+        private String receiverName;
+        private String phone;
+        private String addressLine;
+        private String tag;
+
+        @JsonProperty("isDefault")
+        @JsonAlias("default")
+        private Boolean isDefault;
     }
 }

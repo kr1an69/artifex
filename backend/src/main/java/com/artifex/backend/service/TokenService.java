@@ -1,6 +1,10 @@
 package com.artifex.backend.service;
 
+import com.artifex.backend.entity.User;
+import com.artifex.backend.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.Mac;
@@ -8,6 +12,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Map;
 import java.util.Set;
@@ -17,8 +22,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * Service quản lý Session Token:
  * - Sử dụng chữ ký số mật mã HMAC-SHA256 (Stateless Token) để duy trì phiên đăng nhập bền vững
  *   ngay cả khi khởi động lại (restart) máy chủ Spring Boot.
- * - Hỗ trợ thu hồi (revoke) token khi người dùng bấm Đăng xuất.
- * - Xác thực quyền sở hữu tài nguyên để chống lỗ hổng IDOR.
+ * - Hỗ trợ thu hồi (revoke) từng token khi đăng xuất và vô hiệu toàn bộ token cũ theo userId
+ *   khi người dùng đổi mật khẩu hoặc đặt lại mật khẩu.
+ * - Ở môi trường production (profile "prod"), bắt buộc cấu hình ARTIFEX_JWT_SECRET riêng.
  */
 @Service
 public class TokenService {
@@ -27,6 +33,7 @@ public class TokenService {
     private static final long EXPIRATION_TIME_MS = 7L * 24 * 60 * 60 * 1000L;
     private static final String HMAC_ALGORITHM = "HmacSHA256";
     private static final String TOKEN_PREFIX = "artifex.";
+    static final String DEV_FALLBACK_SECRET = "ArtifexSecretKeyForTokenSigning2026Secure256BitKey!";
 
     private final byte[] secretKeyBytes;
     private final SecureRandom secureRandom = new SecureRandom();
@@ -34,26 +41,72 @@ public class TokenService {
     // Danh sách các token đã bị thu hồi khi đăng xuất
     private final Set<String> revokedTokens = ConcurrentHashMap.newKeySet();
 
+    // Mốc thời gian (epoch ms) vô hiệu hóa toàn bộ token cấp trước đó của từng user
+    private final Map<Long, Long> userInvalidBefore = new ConcurrentHashMap<>();
+
     // Tương thích ngược với các token ngẫu nhiên cũ
     private final Map<String, TokenSession> legacyTokenStore = new ConcurrentHashMap<>();
 
+    @Autowired(required = false)
+    private UserRepository userRepository;
+
     public TokenService() {
-        this("ArtifexSecretKeyForTokenSigning2026Secure256BitKey!");
+        this(DEV_FALLBACK_SECRET);
     }
 
-    public TokenService(@Value("${artifex.jwt.secret:ArtifexSecretKeyForTokenSigning2026Secure256BitKey!}") String secretKey) {
-        this.secretKeyBytes = secretKey.getBytes(StandardCharsets.UTF_8);
+    public void setUserRepository(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    public TokenService(String secretKey) {
+        this(secretKey, false);
+    }
+
+    @Autowired
+    public TokenService(@Value("${artifex.jwt.secret:}") String secretKey, Environment environment) {
+        this(secretKey, isProdEnvironment(environment));
+    }
+
+    TokenService(String secretKey, boolean prodMode) {
+        String trimmed = secretKey != null ? secretKey.trim() : "";
+        if (prodMode && (trimmed.isEmpty() || DEV_FALLBACK_SECRET.equals(trimmed))) {
+            throw new IllegalStateException(
+                    "Môi trường production yêu cầu cấu hình biến môi trường ARTIFEX_JWT_SECRET riêng (không được dùng khóa mặc định)."
+            );
+        }
+        String effectiveSecret;
+        if (trimmed.isEmpty()) {
+            effectiveSecret = DEV_FALLBACK_SECRET;
+            System.err.println("[SECURITY WARNING] ARTIFEX_JWT_SECRET chưa được thiết lập; đang dùng secret phát triển nội bộ.");
+        } else {
+            effectiveSecret = trimmed;
+        }
+        this.secretKeyBytes = effectiveSecret.getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static boolean isProdEnvironment(Environment environment) {
+        if (environment == null) {
+            return false;
+        }
+        return Arrays.stream(environment.getActiveProfiles())
+                .anyMatch(profile -> "prod".equalsIgnoreCase(profile) || "production".equalsIgnoreCase(profile));
     }
 
     public static class TokenSession {
         private final Long userId;
         private final String role;
         private final long expiresAt;
+        private final long issuedAt;
 
         public TokenSession(Long userId, String role, long expiresAt) {
+            this(userId, role, expiresAt, expiresAt - EXPIRATION_TIME_MS);
+        }
+
+        public TokenSession(Long userId, String role, long expiresAt, long issuedAt) {
             this.userId = userId;
             this.role = role != null ? role : "USER";
             this.expiresAt = expiresAt;
+            this.issuedAt = issuedAt;
         }
 
         public Long getUserId() {
@@ -64,6 +117,14 @@ public class TokenService {
             return role;
         }
 
+        public long getExpiresAt() {
+            return expiresAt;
+        }
+
+        public long getIssuedAt() {
+            return issuedAt;
+        }
+
         public boolean isExpired() {
             return System.currentTimeMillis() > expiresAt;
         }
@@ -72,16 +133,18 @@ public class TokenService {
     /**
      * Sinh token HMAC-SHA256 bền vững:
      * Định dạng: artifex.<Base64URL(payload)>.<Base64URL(chữ ký HMAC-SHA256)>
-     * Khi server restart, token vẫn được giải mã và kiểm tra hợp lệ mà không phụ thuộc RAM.
      */
     public String generateToken(Long userId, String role) {
-        long expiresAt = System.currentTimeMillis() + EXPIRATION_TIME_MS;
+        long now = System.currentTimeMillis();
+        Long invalidBefore = userId != null ? userInvalidBefore.get(userId) : null;
+        long issuedAt = invalidBefore != null ? Math.max(now, invalidBefore + 1L) : now;
+        long expiresAt = issuedAt + EXPIRATION_TIME_MS;
         String safeRole = (role != null && !role.isBlank()) ? role.trim() : "USER";
         byte[] nonceBytes = new byte[8];
         secureRandom.nextBytes(nonceBytes);
         String nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(nonceBytes);
 
-        String payload = userId + ":" + safeRole + ":" + expiresAt + ":" + nonce;
+        String payload = userId + ":" + safeRole + ":" + expiresAt + ":" + nonce + ":" + issuedAt;
         String encodedPayload = Base64.getUrlEncoder().withoutPadding().encodeToString(payload.getBytes(StandardCharsets.UTF_8));
         String signature = computeHmac(encodedPayload);
 
@@ -89,8 +152,49 @@ public class TokenService {
     }
 
     /**
+     * Vô hiệu hóa toàn bộ token đã cấp trước thời điểm hiện tại cho userId (khi đổi/reset mật khẩu).
+     */
+    public long invalidateUserTokens(Long userId) {
+        return invalidateUserTokens(userId, System.currentTimeMillis());
+    }
+
+    public long invalidateUserTokens(Long userId, long cutoffMillis) {
+        if (userId != null) {
+            return userInvalidBefore.merge(userId, cutoffMillis, Math::max);
+        }
+        return cutoffMillis;
+    }
+
+    /**
+     * Đối chiếu thời điểm phát hành token với cột {@code tokenValidAfter} trong DB của người dùng.
+     */
+    public boolean isTokenRevokedForUser(TokenSession session, User user) {
+        if (session == null || user == null) {
+            return true;
+        }
+        Long validAfter = user.getTokenValidAfter();
+        if (validAfter != null) {
+            if (user.getId() != null) {
+                userInvalidBefore.merge(user.getId(), validAfter, Math::max);
+            }
+            if (session.getIssuedAt() <= validAfter) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isRevokedInDatabase(TokenSession session) {
+        if (userRepository == null || session == null || session.getUserId() == null) {
+            return false;
+        }
+        User user = userRepository.findById(session.getUserId()).orElse(null);
+        return user != null && isTokenRevokedForUser(session, user);
+    }
+
+    /**
      * Kiểm tra chuỗi Authorization header (Bearer <token>).
-     * Trả về TokenSession nếu chữ ký hợp lệ và chưa hết hạn, ngược lại trả về null.
+     * Trả về TokenSession nếu chữ ký hợp lệ, chưa hết hạn và chưa bị thu hồi; ngược lại trả về null.
      */
     public TokenSession validateHeader(String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
@@ -127,12 +231,25 @@ public class TokenService {
                 Long userId = Long.parseLong(parts[0]);
                 String role = parts[1];
                 long expiresAt = Long.parseLong(parts[2]);
+                long issuedAt = parts.length >= 5
+                        ? Long.parseLong(parts[4])
+                        : (expiresAt - EXPIRATION_TIME_MS);
 
                 if (System.currentTimeMillis() > expiresAt) {
                     revokedTokens.add(token);
                     return null;
                 }
-                return new TokenSession(userId, role, expiresAt);
+
+                Long invalidBefore = userInvalidBefore.get(userId);
+                if (invalidBefore != null && issuedAt <= invalidBefore) {
+                    return null;
+                }
+
+                TokenSession session = new TokenSession(userId, role, expiresAt, issuedAt);
+                if (isRevokedInDatabase(session)) {
+                    return null;
+                }
+                return session;
             } catch (Exception e) {
                 return null;
             }
@@ -142,6 +259,15 @@ public class TokenService {
         TokenSession legacySession = legacyTokenStore.get(token);
         if (legacySession != null) {
             if (legacySession.isExpired()) {
+                legacyTokenStore.remove(token);
+                return null;
+            }
+            Long invalidBefore = userInvalidBefore.get(legacySession.getUserId());
+            if (invalidBefore != null && legacySession.getIssuedAt() <= invalidBefore) {
+                legacyTokenStore.remove(token);
+                return null;
+            }
+            if (isRevokedInDatabase(legacySession)) {
                 legacyTokenStore.remove(token);
                 return null;
             }
