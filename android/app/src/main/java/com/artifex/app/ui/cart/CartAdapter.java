@@ -8,7 +8,6 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
-import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.artifex.app.R;
@@ -20,12 +19,9 @@ import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 
 /** Adapter hiển thị danh sách sản phẩm trong giỏ hàng (Room) - Phụ trách: Hiếu. */
 public class CartAdapter extends RecyclerView.Adapter<CartAdapter.CartViewHolder> {
-
-    private static final Object PAYLOAD_QUANTITY = new Object();
 
     public interface OnCartActionListener {
         void onIncrease(CartItem item);
@@ -43,50 +39,11 @@ public class CartAdapter extends RecyclerView.Adapter<CartAdapter.CartViewHolder
     }
 
     public void updateData(List<CartItem> newItems) {
-        List<CartItem> updated = newItems != null ? new ArrayList<>(newItems) : new ArrayList<>();
-        DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new DiffUtil.Callback() {
-            @Override
-            public int getOldListSize() {
-                return items.size();
-            }
-
-            @Override
-            public int getNewListSize() {
-                return updated.size();
-            }
-
-            @Override
-            public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
-                return items.get(oldItemPosition).getProductId() == updated.get(newItemPosition).getProductId();
-            }
-
-            @Override
-            public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
-                CartItem oldItem = items.get(oldItemPosition);
-                CartItem newItem = updated.get(newItemPosition);
-                return oldItem.getQuantity() == newItem.getQuantity()
-                        && Double.compare(oldItem.getPrice(), newItem.getPrice()) == 0
-                        && Objects.equals(oldItem.getProductName(), newItem.getProductName())
-                        && Objects.equals(oldItem.getImageUrl(), newItem.getImageUrl());
-            }
-
-            @Override
-            public Object getChangePayload(int oldItemPosition, int newItemPosition) {
-                CartItem oldItem = items.get(oldItemPosition);
-                CartItem newItem = updated.get(newItemPosition);
-                if (oldItem.getQuantity() != newItem.getQuantity()
-                        && Double.compare(oldItem.getPrice(), newItem.getPrice()) == 0
-                        && Objects.equals(oldItem.getProductName(), newItem.getProductName())
-                        && Objects.equals(oldItem.getImageUrl(), newItem.getImageUrl())) {
-                    return PAYLOAD_QUANTITY;
-                }
-                return null;
-            }
-        });
-
         items.clear();
-        items.addAll(updated);
-        diffResult.dispatchUpdatesTo(this);
+        if (newItems != null) {
+            items.addAll(newItems);
+        }
+        notifyDataSetChanged();
     }
 
     public static String formatCurrency(double amount) {
@@ -98,19 +55,6 @@ public class CartAdapter extends RecyclerView.Adapter<CartAdapter.CartViewHolder
     public CartViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_cart, parent, false);
         return new CartViewHolder(view);
-    }
-
-    @Override
-    public void onBindViewHolder(@NonNull CartViewHolder holder, int position, @NonNull List<Object> payloads) {
-        if (!payloads.isEmpty() && payloads.contains(PAYLOAD_QUANTITY)) {
-            CartItem item = items.get(position);
-            holder.tvQuantity.setText(String.valueOf(item.getQuantity()));
-            holder.btnIncrease.setOnClickListener(v -> listener.onIncrease(item));
-            holder.btnDecrease.setOnClickListener(v -> listener.onDecrease(item));
-            holder.btnRemove.setOnClickListener(v -> listener.onRemove(item));
-            return;
-        }
-        super.onBindViewHolder(holder, position, payloads);
     }
 
     @Override

@@ -9,7 +9,6 @@ import com.artifex.backend.repository.OrderDetailRepository;
 import com.artifex.backend.repository.OrderRepository;
 import com.artifex.backend.repository.ProductRepository;
 import com.artifex.backend.repository.UserRepository;
-import com.artifex.backend.service.TokenService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -38,7 +37,6 @@ class OrderControllerTest {
     private OrderDetailRepository orderDetailRepository;
     private ProductRepository productRepository;
     private UserRepository userRepository;
-    private TokenService tokenService;
     private OrderController orderController;
 
     @BeforeEach
@@ -47,9 +45,8 @@ class OrderControllerTest {
         orderDetailRepository = mock(OrderDetailRepository.class);
         productRepository = mock(ProductRepository.class);
         userRepository = mock(UserRepository.class);
-        tokenService = new TokenService();
         orderController = new OrderController(
-                orderRepository, orderDetailRepository, productRepository, userRepository, tokenService
+                orderRepository, orderDetailRepository, productRepository, userRepository
         );
     }
 
@@ -83,8 +80,7 @@ class OrderControllerTest {
         request.setShippingAddress("TP. Thủ Đức, TP.HCM");
         request.setItems(List.of(item));
 
-        String token = tokenService.generateToken(1L, "USER");
-        ResponseEntity<Map<String, Object>> response = orderController.createOrder(request, "Bearer " + token);
+        ResponseEntity<Map<String, Object>> response = orderController.createOrder(request);
 
         assertEquals(HttpStatus.CREATED, response.getStatusCode());
         assertNotNull(response.getBody());
@@ -130,32 +126,6 @@ class OrderControllerTest {
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         assertNotNull(response.getBody());
         assertEquals("ERROR", response.getBody().get("status"));
-        verify(orderRepository, never()).save(any());
-    }
-
-    @Test
-    void createOrderBlocksInvalidTokenAndMismatchedUserId() {
-        OrderCreateRequest.Item item = new OrderCreateRequest.Item();
-        item.setProductId(1L);
-        item.setQuantity(1);
-
-        OrderCreateRequest request = new OrderCreateRequest();
-        request.setUserId(2L);
-        request.setReceiverName("Nguyễn Văn B");
-        request.setReceiverPhone("0901234567");
-        request.setShippingAddress("TP.HCM");
-        request.setItems(List.of(item));
-
-        // Token giả mạo / sai chữ ký -> 401 Unauthorized
-        ResponseEntity<Map<String, Object>> invalidTokenResp =
-                orderController.createOrder(request, "Bearer invalid.token.value");
-        assertEquals(HttpStatus.UNAUTHORIZED, invalidTokenResp.getStatusCode());
-
-        // Token của User 1 nhưng cố đặt hàng dưới tên User 2 -> 403 Forbidden (chống IDOR)
-        String user1Token = tokenService.generateToken(1L, "USER");
-        ResponseEntity<Map<String, Object>> forbiddenResp =
-                orderController.createOrder(request, "Bearer " + user1Token);
-        assertEquals(HttpStatus.FORBIDDEN, forbiddenResp.getStatusCode());
         verify(orderRepository, never()).save(any());
     }
 

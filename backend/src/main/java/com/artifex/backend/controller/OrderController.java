@@ -9,10 +9,8 @@ import com.artifex.backend.repository.OrderDetailRepository;
 import com.artifex.backend.repository.OrderRepository;
 import com.artifex.backend.repository.ProductRepository;
 import com.artifex.backend.repository.UserRepository;
-import com.artifex.backend.service.TokenService;
-import com.artifex.backend.service.TokenService.TokenSession;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,7 +19,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -40,6 +37,7 @@ import java.util.Optional;
  */
 @RestController
 @RequestMapping("/api/orders")
+@RequiredArgsConstructor
 @CrossOrigin(origins = "*")
 public class OrderController {
 
@@ -47,48 +45,14 @@ public class OrderController {
     private final OrderDetailRepository orderDetailRepository;
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
-    private final TokenService tokenService;
-
-    @Autowired
-    public OrderController(OrderRepository orderRepository,
-                           OrderDetailRepository orderDetailRepository,
-                           ProductRepository productRepository,
-                           UserRepository userRepository,
-                           TokenService tokenService) {
-        this.orderRepository = orderRepository;
-        this.orderDetailRepository = orderDetailRepository;
-        this.productRepository = productRepository;
-        this.userRepository = userRepository;
-        this.tokenService = tokenService;
-    }
-
-    public OrderController(OrderRepository orderRepository,
-                           OrderDetailRepository orderDetailRepository,
-                           ProductRepository productRepository,
-                           UserRepository userRepository) {
-        this(orderRepository, orderDetailRepository, productRepository, userRepository, new TokenService());
-    }
-
-    public ResponseEntity<Map<String, Object>> createOrder(OrderCreateRequest request) {
-        return createOrder(request, null);
-    }
 
     /**
-     * Tạo đơn hàng: xác thực token (nếu client gửi Authorization header), kiểm tra user,
-     * kiểm tra tồn kho, tính tổng tiền theo giá trong DB, trừ kho và lưu Order + OrderDetail
-     * trong cùng 1 transaction (lỗi giữa chừng sẽ rollback hết).
+     * Tạo đơn hàng: kiểm tra user, kiểm tra tồn kho, tính tổng tiền theo giá trong DB,
+     * trừ kho và lưu Order + OrderDetail trong cùng 1 transaction (lỗi giữa chừng sẽ rollback hết).
      */
     @PostMapping
     @Transactional
-    public ResponseEntity<Map<String, Object>> createOrder(
-            @Valid @RequestBody OrderCreateRequest request,
-            @RequestHeader(value = "Authorization", required = false) String authHeader) {
-
-        ResponseEntity<Map<String, Object>> authError = verifyAuthorization(request.getUserId(), authHeader);
-        if (authError != null) {
-            return authError;
-        }
-
+    public ResponseEntity<Map<String, Object>> createOrder(@Valid @RequestBody OrderCreateRequest request) {
         Optional<User> optionalUser = userRepository.findById(request.getUserId());
         if (optionalUser.isEmpty()) {
             return error(HttpStatus.NOT_FOUND, "Không tìm thấy người dùng với ID: " + request.getUserId());
@@ -147,46 +111,14 @@ public class OrderController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    public ResponseEntity<Map<String, Object>> getOrderById(Long id) {
-        return getOrderById(id, null);
-    }
-
     /** Xem chi tiết 1 đơn hàng theo id. */
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> getOrderById(
-            @PathVariable Long id,
-            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+    public ResponseEntity<Map<String, Object>> getOrderById(@PathVariable Long id) {
         Optional<Order> optionalOrder = orderRepository.findById(id);
         if (optionalOrder.isEmpty()) {
             return error(HttpStatus.NOT_FOUND, "Không tìm thấy đơn hàng với ID: " + id);
         }
-        Order order = optionalOrder.get();
-        ResponseEntity<Map<String, Object>> authError = verifyAuthorization(order.getUser().getId(), authHeader);
-        if (authError != null) {
-            return authError;
-        }
-        return ResponseEntity.ok(toOrderMap(order));
-    }
-
-    /**
-     * Nếu client gửi kèm Authorization header (khi user đã đăng nhập), xác thực token và kiểm tra
-     * quyền sở hữu userId để chống giả mạo IDOR. Nếu không có header (chế độ Loose Coupling demo),
-     * cho phép đi tiếp để tương thích kiểm thử độc lập.
-     */
-    private ResponseEntity<Map<String, Object>> verifyAuthorization(Long targetUserId, String authHeader) {
-        if (authHeader == null || authHeader.isBlank()) {
-            return null;
-        }
-        TokenSession session = tokenService != null ? tokenService.validateHeader(authHeader) : null;
-        if (session == null) {
-            return error(HttpStatus.UNAUTHORIZED, "Phiên đăng nhập không hợp lệ hoặc đã hết hạn");
-        }
-        boolean isOwner = session.getUserId().equals(targetUserId);
-        boolean isAdmin = "ADMIN".equalsIgnoreCase(session.getRole());
-        if (!isOwner && !isAdmin) {
-            return error(HttpStatus.FORBIDDEN, "Không có quyền thao tác trên đơn hàng của tài khoản khác");
-        }
-        return null;
+        return ResponseEntity.ok(toOrderMap(optionalOrder.get()));
     }
 
     // Đóng gói qua Map (giống OrderHistoryController) để tránh lỗi serialize proxy LAZY của Hibernate

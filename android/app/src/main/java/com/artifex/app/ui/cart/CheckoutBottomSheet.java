@@ -39,19 +39,23 @@ import retrofit2.Response;
  */
 public class CheckoutBottomSheet extends BottomSheetDialogFragment {
 
-    public static final String REQUEST_KEY_ORDER_PLACED = "request_key_order_placed";
+    public interface OnOrderPlacedListener {
+        void onOrderPlaced();
+    }
 
     private static final String ARG_TOTAL = "arg_total";
 
+    private OnOrderPlacedListener listener;
     private TextInputLayout tilName, tilPhone, tilAddress;
     private TextInputEditText etName, etPhone, etAddress;
     private MaterialButton btnConfirm;
 
-    public static CheckoutBottomSheet newInstance(double total) {
+    public static CheckoutBottomSheet newInstance(double total, OnOrderPlacedListener listener) {
         CheckoutBottomSheet sheet = new CheckoutBottomSheet();
         Bundle args = new Bundle();
         args.putDouble(ARG_TOTAL, total);
         sheet.setArguments(args);
+        sheet.listener = listener;
         return sheet;
     }
 
@@ -79,20 +83,15 @@ public class CheckoutBottomSheet extends BottomSheetDialogFragment {
         tvTotal.setText(CartAdapter.formatCurrency(total));
 
         // Điền sẵn thông tin mặc định của khách từ SharedPrefManager (chỉ đọc).
-        // Nếu chưa đăng nhập (Loose Coupling: userId = 1), dùng thông tin mẫu của User #1 trong seed_data.sql;
-        // nếu đã đăng nhập thì giữ nguyên fullName của user và chỉ điền mẫu cho trường SĐT/địa chỉ còn trống.
+        // Nếu chưa đăng nhập (Loose Coupling: userId = 1), tự điền thông tin mẫu của User #1 trong seed_data.sql.
         SharedPrefManager pref = SharedPrefManager.getInstance(requireContext());
         String fullName = pref.getFullName();
         String phone = pref.getPhone();
         String address = pref.getAddress();
 
-        if (!pref.isLoggedIn() && phone.isEmpty() && address.isEmpty()) {
+        if (phone.isEmpty() && address.isEmpty()) {
             fullName = "Nguyễn Văn A";
-        }
-        if (phone.isEmpty()) {
             phone = "0901234567";
-        }
-        if (address.isEmpty()) {
             address = "Khu phố 6, P. Linh Trung, TP. Thủ Đức, TP.HCM";
         }
         etName.setText(fullName);
@@ -129,7 +128,7 @@ public class CheckoutBottomSheet extends BottomSheetDialogFragment {
 
     private boolean validate() {
         String name = textOf(etName);
-        String phone = normalizePhone(textOf(etPhone));
+        String phone = textOf(etPhone);
         String address = textOf(etAddress);
         boolean ok = true;
 
@@ -144,10 +143,6 @@ public class CheckoutBottomSheet extends BottomSheetDialogFragment {
         if (address.isEmpty()) ok = false;
 
         return ok;
-    }
-
-    private String normalizePhone(String rawPhone) {
-        return rawPhone != null ? rawPhone.replaceAll("[\\s.-]", "") : "";
     }
 
     private String textOf(TextInputEditText editText) {
@@ -183,7 +178,7 @@ public class CheckoutBottomSheet extends BottomSheetDialogFragment {
         Map<String, Object> body = new HashMap<>();
         body.put("userId", SharedPrefManager.getInstance(requireContext()).getUserId());
         body.put("receiverName", textOf(etName));
-        body.put("receiverPhone", normalizePhone(textOf(etPhone)));
+        body.put("receiverPhone", textOf(etPhone));
         body.put("shippingAddress", textOf(etAddress));
         body.put("items", itemList);
 
@@ -196,7 +191,7 @@ public class CheckoutBottomSheet extends BottomSheetDialogFragment {
                     CartRepository.getInstance(requireContext()).clearCart(ok -> {
                         if (!isAdded()) return;
                         Toast.makeText(requireContext(), "Đặt hàng thành công!", Toast.LENGTH_LONG).show();
-                        getParentFragmentManager().setFragmentResult(REQUEST_KEY_ORDER_PLACED, new Bundle());
+                        if (listener != null) listener.onOrderPlaced();
                         dismiss();
                     });
                 } else {
