@@ -20,6 +20,7 @@ DROP TABLE IF EXISTS reviews;
 DROP TABLE IF EXISTS products;
 DROP TABLE IF EXISTS categories;
 DROP TABLE IF EXISTS stores;
+DROP TABLE IF EXISTS user_addresses;
 DROP TABLE IF EXISTS users;
 
 SET FOREIGN_KEY_CHECKS = 1;
@@ -38,7 +39,21 @@ CREATE TABLE users (
     gender VARCHAR(20) DEFAULT NULL,
     avatar_url VARCHAR(500) DEFAULT 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80',
     role VARCHAR(20) NOT NULL DEFAULT 'USER',
+    token_valid_after BIGINT DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 1B. BẢNG USER_ADDRESSES (Sổ địa chỉ giao hàng của từng user)
+CREATE TABLE user_addresses (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    receiver_name VARCHAR(100) NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    address_line VARCHAR(255) NOT NULL,
+    tag VARCHAR(40) NOT NULL DEFAULT '🏠 Nhà riêng',
+    is_default TINYINT(1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_address_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 2. BẢNG CATEGORIES
@@ -117,6 +132,11 @@ INSERT INTO users (id, firebase_uid, username, email, password, full_name, phone
 (1, NULL, 'nguyenvana', 'vana@artifex.vn', '123456', 'Nguyễn Văn A', '0901234567', 'Khu phố 6, P. Linh Trung, TP. Thủ Đức, TP.HCM', '15/08/2000', 'Nam', 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=300&q=80', 'USER'),
 (2, NULL, 'admin_artifex', 'admin@artifex.vn', '123456', 'Trần Quản Trị', '0988776655', '398 Nguyễn Tri Phương, P. 4, Q. 10, TP.HCM', '01/01/1995', 'Nam', 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=300&q=80', 'ADMIN');
 
+-- SEED USER_ADDRESSES
+INSERT INTO user_addresses (id, user_id, receiver_name, phone, address_line, tag, is_default) VALUES
+(1, 1, 'Nguyễn Văn A', '0901234567', 'Khu phố 6, P. Linh Trung, TP. Thủ Đức, TP.HCM', '🏠 Nhà riêng', 1),
+(2, 2, 'Trần Quản Trị', '0988776655', '398 Nguyễn Tri Phương, P. 4, Q. 10, TP.HCM', '🏢 Văn phòng', 1);
+
 -- SEED CATEGORIES
 INSERT INTO categories (id, name, description, image_url) VALUES
 (1, 'CPU', 'Bộ vi xử lý trung tâm Intel & AMD Ryzen', 'https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?auto=format&fit=crop&w=600&q=80'),
@@ -173,6 +193,7 @@ INSERT INTO order_details (id, order_id, product_id, quantity, unit_price) VALUE
 (6, 4, 9, 1, 2890000.00);
 
 ALTER TABLE users AUTO_INCREMENT = 100;
+ALTER TABLE user_addresses AUTO_INCREMENT = 100;
 ALTER TABLE categories AUTO_INCREMENT = 100;
 ALTER TABLE products AUTO_INCREMENT = 100;
 ALTER TABLE reviews AUTO_INCREMENT = 100;
