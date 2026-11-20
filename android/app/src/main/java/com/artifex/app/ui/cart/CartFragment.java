@@ -65,6 +65,12 @@ public class CartFragment extends Fragment {
 
         btnAddSampleCart.setOnClickListener(v -> seedSampleCartItems());
 
+        getChildFragmentManager().setFragmentResultListener(
+                CheckoutBottomSheet.REQUEST_KEY_ORDER_PLACED,
+                getViewLifecycleOwner(),
+                (requestKey, result) -> loadCart()
+        );
+
         adapter = new CartAdapter(new CartAdapter.OnCartActionListener() {
             @Override
             public void onIncrease(CartItem item) {
@@ -107,7 +113,7 @@ public class CartFragment extends Fragment {
             for (CartItem item : currentItems) {
                 total += item.getPrice() * item.getQuantity();
             }
-            CheckoutBottomSheet.newInstance(total, this::loadCart)
+            CheckoutBottomSheet.newInstance(total)
                     .show(getChildFragmentManager(), "checkout");
         });
     }
