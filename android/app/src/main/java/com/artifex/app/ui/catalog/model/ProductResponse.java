@@ -34,6 +34,9 @@ public class ProductResponse {
     @SerializedName("reviewCount")
     private Integer reviewCount;
 
+    @SerializedName("discountBadge")
+    private String discountBadge;
+
     public Long getId() {
         return id;
     }
@@ -112,5 +115,13 @@ public class ProductResponse {
 
     public void setReviewCount(Integer reviewCount) {
         this.reviewCount = reviewCount;
+    }
+
+    public String getDiscountBadge() {
+        return discountBadge;
+    }
+
+    public void setDiscountBadge(String discountBadge) {
+        this.discountBadge = discountBadge;
     }
 }
