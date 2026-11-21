@@ -56,23 +56,41 @@ public class CategoryAdapter extends RecyclerView.Adapter<CategoryAdapter.Catego
 
         holder.itemView.setOnClickListener(v -> {
             int currentPos = holder.getAdapterPosition();
-            if (currentPos != RecyclerView.NO_POSITION && currentPos != selectedPosition) {
+            if (currentPos != RecyclerView.NO_POSITION && currentPos < categories.size() && currentPos != selectedPosition) {
                 int previousPos = selectedPosition;
                 selectedPosition = currentPos;
                 notifyItemChanged(previousPos);
                 notifyItemChanged(selectedPosition);
                 if (listener != null) {
-                    listener.onCategoryClick(category, selectedPosition);
+                    listener.onCategoryClick(categories.get(currentPos), selectedPosition);
                 }
             }
         });
     }
 
     public void setSelectedPosition(int position) {
+        if (categories == null || position < 0 || position >= categories.size()) {
+            return;
+        }
         int previousPos = this.selectedPosition;
         this.selectedPosition = position;
-        notifyItemChanged(previousPos);
+        if (previousPos >= 0 && previousPos < categories.size()) {
+            notifyItemChanged(previousPos);
+        }
         notifyItemChanged(this.selectedPosition);
+    }
+
+    /**
+     * Cập nhật lại danh sách danh mục đồng bộ với vị trí đang chọn.
+     */
+    public void updateCategories(List<CatalogFragment.CategoryItem> newCategories, int selectedPosition) {
+        this.categories = newCategories;
+        if (newCategories == null || newCategories.isEmpty()) {
+            this.selectedPosition = 0;
+        } else {
+            this.selectedPosition = Math.max(0, Math.min(selectedPosition, newCategories.size() - 1));
+        }
+        notifyDataSetChanged();
     }
 
     @Override
