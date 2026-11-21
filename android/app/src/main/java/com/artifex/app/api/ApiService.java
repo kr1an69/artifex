@@ -42,6 +42,9 @@ public interface ApiService {
     @retrofit2.http.POST("api/auth/forgot-password/send-otp")
     retrofit2.Call<java.util.Map<String, Object>> requestForgotPasswordOtp(@retrofit2.http.Body java.util.Map<String, Object> body);
 
+    @retrofit2.http.POST("api/auth/forgot-password/verify-otp")
+    retrofit2.Call<java.util.Map<String, Object>> verifyForgotPasswordOtp(@retrofit2.http.Body java.util.Map<String, Object> body);
+
     @retrofit2.http.POST("api/auth/forgot-password")
     retrofit2.Call<java.util.Map<String, Object>> forgotPassword(@retrofit2.http.Body java.util.Map<String, Object> body);
 
@@ -64,10 +67,32 @@ public interface ApiService {
     @retrofit2.http.PUT("api/users/{id}/password")
     retrofit2.Call<java.util.Map<String, Object>> changePassword(@retrofit2.http.Path("id") Long id, @retrofit2.http.Body java.util.Map<String, Object> body);
 
+    @retrofit2.http.GET("api/users/{id}/addresses")
+    retrofit2.Call<java.util.Map<String, Object>> getUserAddresses(@retrofit2.http.Path("id") Long id);
+
+    @retrofit2.http.POST("api/users/{id}/addresses")
+    retrofit2.Call<java.util.Map<String, Object>> addUserAddress(@retrofit2.http.Path("id") Long id, @retrofit2.http.Body java.util.Map<String, Object> body);
+
+    @retrofit2.http.PUT("api/users/{id}/addresses/{addressId}")
+    retrofit2.Call<java.util.Map<String, Object>> updateUserAddress(
+            @retrofit2.http.Path("id") Long id,
+            @retrofit2.http.Path("addressId") Long addressId,
+            @retrofit2.http.Body java.util.Map<String, Object> body
+    );
+
+    @retrofit2.http.DELETE("api/users/{id}/addresses/{addressId}")
+    retrofit2.Call<java.util.Map<String, Object>> deleteUserAddress(
+            @retrofit2.http.Path("id") Long id,
+            @retrofit2.http.Path("addressId") Long addressId
+    );
+
     @retrofit2.http.GET("api/products")
     retrofit2.Call<java.util.Map<String, Object>> getAuthRecommendedProducts(@retrofit2.http.Query("size") int size);
 
     // ==================== STORE & ORDER HISTORY APIS (Bạn 5) ====================
+    @retrofit2.http.GET("api/stores")
+    retrofit2.Call<java.util.List<com.artifex.app.ui.store.StoreModel>> getStores();
+
     @retrofit2.http.GET("api/orders/user/{userId}")
     retrofit2.Call<java.util.List<com.artifex.app.ui.store.OrderModel>> getOrderHistoryByUser(@retrofit2.http.Path("userId") Long userId);
 

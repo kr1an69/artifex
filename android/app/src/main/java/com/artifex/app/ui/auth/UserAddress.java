@@ -16,7 +16,11 @@ public class UserAddress implements Serializable {
     }
 
     public UserAddress(String receiverName, String phone, String addressLine, String tag, boolean isDefault) {
-        this.id = UUID.randomUUID().toString();
+        this(UUID.randomUUID().toString(), receiverName, phone, addressLine, tag, isDefault);
+    }
+
+    public UserAddress(String id, String receiverName, String phone, String addressLine, String tag, boolean isDefault) {
+        this.id = (id != null && !id.trim().isEmpty()) ? id.trim() : UUID.randomUUID().toString();
         this.receiverName = receiverName;
         this.phone = phone;
         this.addressLine = addressLine;

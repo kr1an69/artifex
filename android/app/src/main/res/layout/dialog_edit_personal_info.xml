@@ -57,8 +57,9 @@
                     android:textColor="@color/artifex_text_primary" />
             </com.google.android.material.textfield.TextInputLayout>
 
-            <!-- 2. Email (Có thể thay đổi) -->
+            <!-- 2. Email (Có thể thay đổi với tài khoản SĐT; khóa với tài khoản Google) -->
             <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/tilEditEmail"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
@@ -171,6 +172,15 @@
                     android:textColor="@color/artifex_text_primary"
                     android:textSize="14sp" />
             </RadioGroup>
+
+            <!-- Vòng quay loading ngay trong dialog -->
+            <ProgressBar
+                android:id="@+id/progressEditPersonal"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="12dp"
+                android:visibility="gone" />
 
             <!-- Hàng nút hành động: Hủy & Lưu -->
             <LinearLayout

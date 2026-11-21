@@ -113,6 +113,15 @@
                 android:visibility="gone" />
         </LinearLayout>
 
+        <!-- Vòng quay loading ngay trong dialog -->
+        <ProgressBar
+            android:id="@+id/progressRegisterOtp"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="12dp"
+            android:visibility="gone" />
+
         <!-- Nút Xác nhận & Hoàn tất -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnConfirmRegisterOtp"
