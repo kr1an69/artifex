@@ -43,6 +43,7 @@ import java.util.ArrayList;
 import com.artifex.app.R;
 import com.artifex.app.api.ApiService;
 import com.artifex.app.api.RetrofitClient;
+import com.artifex.app.ui.detail.DetailFragment;
 import com.bumptech.glide.Glide;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -83,6 +84,7 @@ public class AuthFragment extends Fragment {
     private TextView tvSelectedReceiverName, tvSelectedTag, tvSelectedDefaultBadge, tvSelectedPhone, tvSelectedAddressLine;
 
     private boolean isRegisterMode = false;
+    private boolean isAuthInProgress = false;
     private boolean isUploadingAvatar = false;
     private ApiService apiService;
     private SharedPrefManager prefManager;
@@ -307,6 +309,8 @@ public class AuthFragment extends Fragment {
                         });
                     }
                     prefManager.clear();
+                    setAvatarUploadState(false);
+                    setAuthFormLoading(false);
                     signOutFirebaseClient(true);
                     clearAuthFormInputs();
                     resetAvatarPlaceholder();
@@ -664,6 +668,7 @@ public class AuthFragment extends Fragment {
     }
 
     private void handleLogin() {
+        if (isAuthInProgress) return;
         String phone = etPhone.getText() != null ? etPhone.getText().toString().trim() : "";
         String password = etPassword.getText() != null ? etPassword.getText().toString() : "";
 
@@ -676,8 +681,7 @@ public class AuthFragment extends Fragment {
             return;
         }
 
-        progressBar.setVisibility(View.VISIBLE);
-        btnSubmitAuth.setEnabled(false);
+        setAuthFormLoading(true);
         Map<String, Object> body = new HashMap<>();
         body.put("phone", normalizeLoginPhone(phone));
         body.put("password", password);
@@ -685,9 +689,11 @@ public class AuthFragment extends Fragment {
         apiService.login(body).enqueue(new Callback<Map<String, Object>>() {
             @Override
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
-                if (!isAdded() || getView() == null) return;
-                progressBar.setVisibility(View.GONE);
-                btnSubmitAuth.setEnabled(true);
+                if (!isAdded() || getView() == null) {
+                    isAuthInProgress = false;
+                    return;
+                }
+                setAuthFormLoading(false);
                 if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
                     if (!applyAuthSessionFromResponse(response.body(), false)) {
                         Toast.makeText(requireContext(), "Phản hồi tài khoản không hợp lệ!", Toast.LENGTH_LONG).show();
@@ -704,9 +710,11 @@ public class AuthFragment extends Fragment {
 
             @Override
             public void onFailure(Call<Map<String, Object>> call, Throwable t) {
-                if (!isAdded() || getView() == null) return;
-                progressBar.setVisibility(View.GONE);
-                btnSubmitAuth.setEnabled(true);
+                if (!isAdded() || getView() == null) {
+                    isAuthInProgress = false;
+                    return;
+                }
+                setAuthFormLoading(false);
                 Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
@@ -763,6 +771,7 @@ public class AuthFragment extends Fragment {
     }
 
     private void handleRegister() {
+        if (isAuthInProgress) return;
         String fullName = etFullName.getText() != null ? etFullName.getText().toString().trim() : "";
         String email = etEmail.getText() != null ? etEmail.getText().toString().trim().toLowerCase() : "";
         String phone = (etPhone != null && etPhone.getText() != null) ? etPhone.getText().toString().trim() : "";
@@ -815,8 +824,7 @@ public class AuthFragment extends Fragment {
         }
 
         // Bước 1: Gửi mã OTP xác thực tới số điện thoại người dùng
-        progressBar.setVisibility(View.VISIBLE);
-        btnSubmitAuth.setEnabled(false);
+        setAuthFormLoading(true);
 
         Map<String, Object> reqBody = new HashMap<>();
         reqBody.put("phone", cleanPhone);
@@ -825,9 +833,11 @@ public class AuthFragment extends Fragment {
         apiService.sendRegisterOtp(reqBody).enqueue(new Callback<Map<String, Object>>() {
             @Override
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
-                if (!isAdded()) return;
-                progressBar.setVisibility(View.GONE);
-                btnSubmitAuth.setEnabled(true);
+                if (!isAdded() || getView() == null) {
+                    isAuthInProgress = false;
+                    return;
+                }
+                setAuthFormLoading(false);
 
                 if (response.isSuccessful() && response.body() != null && "SUCCESS".equals(response.body().get("status"))) {
                     String msg = (String) response.body().get("message");
@@ -846,9 +856,11 @@ public class AuthFragment extends Fragment {
 
             @Override
             public void onFailure(Call<Map<String, Object>> call, Throwable t) {
-                if (!isAdded()) return;
-                progressBar.setVisibility(View.GONE);
-                btnSubmitAuth.setEnabled(true);
+                if (!isAdded() || getView() == null) {
+                    isAuthInProgress = false;
+                    return;
+                }
+                setAuthFormLoading(false);
                 Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
@@ -1042,9 +1054,9 @@ public class AuthFragment extends Fragment {
     private int firebaseAttempt;
 
     private void handleFirebaseLogin() {
+        if (isAuthInProgress) return;
         final int attempt = ++firebaseAttempt;
-        progressBar.setVisibility(View.VISIBLE);
-        btnFirebaseAuth.setEnabled(false);
+        setAuthFormLoading(true);
         googleSignInCancellation = new android.os.CancellationSignal();
         FirebaseAuthHelper.signInWithGoogle(requireActivity(), googleSignInCancellation,
                 new FirebaseAuthHelper.FirebaseAuthCallback() {
@@ -1069,8 +1081,30 @@ public class AuthFragment extends Fragment {
     }
 
     private void finishFirebaseLogin() {
-        progressBar.setVisibility(View.GONE);
-        btnFirebaseAuth.setEnabled(true);
+        setAuthFormLoading(false);
+    }
+
+    private void setAuthFormLoading(boolean loading) {
+        isAuthInProgress = loading;
+        if (progressBar != null) {
+            progressBar.setVisibility(loading ? View.VISIBLE : View.GONE);
+        }
+        if (btnSubmitAuth != null) {
+            btnSubmitAuth.setEnabled(!loading);
+        }
+        if (btnFirebaseAuth != null) {
+            btnFirebaseAuth.setEnabled(!loading);
+        }
+        if (tvToggleMode != null) {
+            tvToggleMode.setEnabled(!loading);
+            tvToggleMode.setClickable(!loading);
+            tvToggleMode.setAlpha(loading ? 0.5f : 1f);
+        }
+        if (tvForgotPassword != null) {
+            tvForgotPassword.setEnabled(!loading);
+            tvForgotPassword.setClickable(!loading);
+            tvForgotPassword.setAlpha(loading ? 0.5f : 1f);
+        }
     }
 
     private void syncFirebaseUserToBackend(String idToken, int attempt) {
@@ -1111,6 +1145,8 @@ public class AuthFragment extends Fragment {
 
     @Override
     public void onDestroyView() {
+        isAuthInProgress = false;
+        isUploadingAvatar = false;
         firebaseAttempt++;
         if (googleSignInCancellation != null) googleSignInCancellation.cancel();
         if (firebaseLoginCall != null) firebaseLoginCall.cancel();
@@ -1501,6 +1537,8 @@ public class AuthFragment extends Fragment {
 
     private void handleUnauthorizedSession() {
         prefManager.clear();
+        setAvatarUploadState(false);
+        setAuthFormLoading(false);
         signOutFirebaseClient(false);
         clearAuthFormInputs();
         resetAvatarPlaceholder();
@@ -1527,6 +1565,10 @@ public class AuthFragment extends Fragment {
                     isUploadingAvatar = false;
                     return;
                 }
+                if (!prefManager.isLoggedIn() || !userId.equals(prefManager.getLoggedInUserId())) {
+                    setAvatarUploadState(false);
+                    return;
+                }
                 if (prepResult.part == null) {
                     setAvatarUploadState(false);
                     String errMsg = (prepResult.errorMessage != null && !prepResult.errorMessage.isEmpty())
@@ -1544,6 +1586,9 @@ public class AuthFragment extends Fragment {
                             return;
                         }
                         setAvatarUploadState(false);
+                        if (!prefManager.isLoggedIn() || !userId.equals(prefManager.getLoggedInUserId())) {
+                            return;
+                        }
                         if (response.code() == 401) {
                             handleUnauthorizedSession();
                             return;
@@ -1574,6 +1619,9 @@ public class AuthFragment extends Fragment {
                             return;
                         }
                         setAvatarUploadState(false);
+                        if (!prefManager.isLoggedIn() || !userId.equals(prefManager.getLoggedInUserId())) {
+                            return;
+                        }
                         Toast.makeText(requireContext(), "Lỗi kết nối máy chủ: " + t.getMessage(), Toast.LENGTH_SHORT).show();
                     }
                 });
@@ -2349,15 +2397,13 @@ public class AuthFragment extends Fragment {
         if (btnViewDetail != null) {
             btnViewDetail.setOnClickListener(v -> {
                 dialog.dismiss();
-                Bundle resultBundle = new Bundle();
-                resultBundle.putLong("productId", product.getId());
-                getParentFragmentManager().setFragmentResult("selected_product", resultBundle);
-                if (getActivity() instanceof MainActivity) {
-                    BottomNavigationView nav = getActivity().findViewById(R.id.bottom_navigation);
-                    if (nav != null) {
-                        nav.setSelectedItemId(R.id.nav_detail);
-                    }
-                }
+                long targetProductId = product.getId() > 0 ? product.getId() : 1L;
+                DetailFragment detailFragment = DetailFragment.newInstance(targetProductId);
+                getParentFragmentManager()
+                        .beginTransaction()
+                        .replace(R.id.fragment_container, detailFragment)
+                        .addToBackStack("auth_to_detail")
+                        .commit();
             });
         }
 
