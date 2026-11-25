@@ -2,6 +2,7 @@ package com.artifex.app.ui.store;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.Dialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -10,15 +11,20 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.location.Location;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
+import android.widget.FrameLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -28,21 +34,27 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
+import androidx.core.graphics.Insets;
 import androidx.core.graphics.drawable.DrawableCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.artifex.app.BuildConfig;
 import com.artifex.app.R;
 import com.artifex.app.api.RetrofitClient;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.Priority;
+import com.google.android.gms.tasks.CancellationTokenSource;
 import com.google.android.material.button.MaterialButton;
 
 import org.osmdroid.api.IMapController;
 import org.osmdroid.config.Configuration;
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
+import org.osmdroid.tileprovider.tilesource.XYTileSource;
 import org.osmdroid.util.GeoPoint;
 import org.osmdroid.views.CustomZoomButtonsController;
 import org.osmdroid.views.MapView;
@@ -88,18 +100,30 @@ public class StoreFragment extends Fragment {
     private TextView tvStoreHeaderSubtitle;
     private MaterialButton btnRefreshStores;
     private View cardStoreOfflineNotice;
+    private FrameLayout mapSlotContainer;
+    private View cardMapContainer;
     private MapView mapViewStores;
+    private MaterialButton btnToggleMapExpand;
+    private View layoutMapZoomControls;
+    private MaterialButton btnMapZoomIn;
+    private MaterialButton btnMapZoomOut;
     private MaterialButton btnLocateNearest;
     private TextView tvNearestStoreBanner;
     private TextView tvMultithreadStatus;
     private RecyclerView rvStores;
     private ProgressBar progressStoreLoading;
 
-    // Map, Location & Adapter
+    // Map, Location, Multithreading & Adapter
     private StoreAdapter storeAdapter;
     private final List<StoreModel> storeList = new ArrayList<>();
     private final Map<Long, Marker> storeMarkerMap = new HashMap<>();
     private FusedLocationProviderClient fusedLocationClient;
+    private ExecutorService distanceExecutor;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private CancellationTokenSource locationCancellationTokenSource;
+    private boolean isLocating = false;
+    private Dialog expandedMapDialog;
+    private boolean isMapExpanded = false;
     private double currentUserLat = DEFAULT_USER_LAT;
     private double currentUserLng = DEFAULT_USER_LNG;
     private boolean hasUserLocation = false;
@@ -139,6 +163,7 @@ public class StoreFragment extends Fragment {
         Configuration.getInstance().setUserAgentValue("ArtifexAndroidApp/1.0 (" + appContext.getPackageName() + ")");
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
+        distanceExecutor = Executors.newSingleThreadExecutor();
     }
 
     @Nullable
@@ -165,7 +190,13 @@ public class StoreFragment extends Fragment {
         tvStoreHeaderSubtitle = view.findViewById(R.id.tvStoreHeaderSubtitle);
         btnRefreshStores = view.findViewById(R.id.btnRefreshStores);
         cardStoreOfflineNotice = view.findViewById(R.id.cardStoreOfflineNotice);
+        mapSlotContainer = view.findViewById(R.id.mapSlotContainer);
+        cardMapContainer = view.findViewById(R.id.cardMapContainer);
         mapViewStores = view.findViewById(R.id.mapViewStores);
+        btnToggleMapExpand = view.findViewById(R.id.btnToggleMapExpand);
+        layoutMapZoomControls = view.findViewById(R.id.layoutMapZoomControls);
+        btnMapZoomIn = view.findViewById(R.id.btnMapZoomIn);
+        btnMapZoomOut = view.findViewById(R.id.btnMapZoomOut);
         btnLocateNearest = view.findViewById(R.id.btnLocateNearest);
         tvNearestStoreBanner = view.findViewById(R.id.tvNearestStoreBanner);
         tvMultithreadStatus = view.findViewById(R.id.tvMultithreadStatus);
@@ -174,10 +205,32 @@ public class StoreFragment extends Fragment {
     }
 
     /**
-     * Khởi tạo cấu hình Bản đồ osmdroid dùng OpenStreetMap chính thức (MAPNIK - miễn phí 100%, không API Key).
+     * Khởi tạo cấu hình Bản đồ osmdroid dùng CARTO Voyager (dữ liệu OpenStreetMap + API Key miễn phí).
+     * Nếu máy chưa cấu hình CARTO_API_KEY trong local.properties sẽ tự fallback về TileSourceFactory.MAPNIK.
      */
     private void setupMapView() {
-        mapViewStores.setTileSource(TileSourceFactory.MAPNIK);
+        String cartoKey = BuildConfig.CARTO_API_KEY;
+        if (cartoKey != null && !cartoKey.trim().isEmpty()) {
+            final String keyQuery = "?key=" + cartoKey.trim();
+            XYTileSource cartoVoyager = new XYTileSource(
+                    "CartoVoyagerKeyed",
+                    0,
+                    19,
+                    256,
+                    ".png",
+                    new String[]{"https://basemaps.cartocdn.com/rastertiles/voyager/"},
+                    "© OpenStreetMap contributors © CARTO"
+            ) {
+                @Override
+                public String getTileURLString(long pMapTileIndex) {
+                    return super.getTileURLString(pMapTileIndex) + keyQuery;
+                }
+            };
+            mapViewStores.setTileSource(cartoVoyager);
+        } else {
+            mapViewStores.setTileSource(TileSourceFactory.MAPNIK);
+        }
+
         mapViewStores.setMultiTouchControls(true);
         // Tắt 2 nút zoom mặc định ở giữa-dưới để không bị đè lên nút "Định vị gần nhất"
         mapViewStores.getZoomController().setVisibility(CustomZoomButtonsController.Visibility.NEVER);
@@ -213,6 +266,123 @@ public class StoreFragment extends Fragment {
     private void setupActions() {
         btnRefreshStores.setOnClickListener(v -> fetchStoresFromBackend());
         btnLocateNearest.setOnClickListener(v -> checkPermissionAndLocateUser(true));
+        btnToggleMapExpand.setOnClickListener(v -> toggleMapExpandMode());
+        btnMapZoomIn.setOnClickListener(v -> {
+            if (mapViewStores != null) {
+                mapViewStores.getController().zoomIn();
+            }
+        });
+        btnMapZoomOut.setOnClickListener(v -> {
+            if (mapViewStores != null) {
+                mapViewStores.getController().zoomOut();
+            }
+        });
+    }
+
+    /**
+     * Phóng to / thu nhỏ bản đồ bằng cách chuyển trực tiếp cardMapContainer sang Dialog nền tối
+     * (đè lên Header & BottomNav nhưng vẫn tôn trọng thanh trạng thái và phím điều hướng hệ thống).
+     */
+    private void toggleMapExpandMode() {
+        if (!isAdded() || cardMapContainer == null || mapSlotContainer == null) return;
+
+        if (isMapExpanded) {
+            if (expandedMapDialog != null && expandedMapDialog.isShowing()) {
+                expandedMapDialog.dismiss();
+            }
+            return;
+        }
+
+        Dialog dialog = new Dialog(requireContext());
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+
+        FrameLayout backdrop = new FrameLayout(requireContext());
+        backdrop.setLayoutParams(new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+
+        int outerMarginPx = Math.round(16 * getResources().getDisplayMetrics().density);
+        backdrop.setPadding(outerMarginPx, outerMarginPx, outerMarginPx, outerMarginPx);
+        ViewCompat.setOnApplyWindowInsetsListener(backdrop, (v, windowInsets) -> {
+            Insets sysBars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
+            v.setPadding(
+                    sysBars.left + outerMarginPx,
+                    sysBars.top + outerMarginPx,
+                    sysBars.right + outerMarginPx,
+                    sysBars.bottom + outerMarginPx
+            );
+            return windowInsets;
+        });
+
+        // Bấm vào vùng tối xung quanh để thu nhỏ bản đồ
+        backdrop.setOnClickListener(v -> dialog.dismiss());
+
+        // Chuyển chính cardMapContainer hiện tại vào Dialog (giữ nguyên camera, zoom, Marker & cache tile)
+        ViewGroup currentParent = (ViewGroup) cardMapContainer.getParent();
+        if (currentParent != null) {
+            currentParent.removeView(cardMapContainer);
+        }
+        FrameLayout.LayoutParams expandedParams = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                Gravity.CENTER
+        );
+        backdrop.addView(cardMapContainer, expandedParams);
+
+        dialog.setContentView(backdrop);
+        dialog.setCancelable(true);
+        dialog.setCanceledOnTouchOutside(true);
+
+        Window window = dialog.getWindow();
+        if (window != null) {
+            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+            window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            window.setDimAmount(0.65f);
+        }
+
+        isMapExpanded = true;
+        expandedMapDialog = dialog;
+        btnToggleMapExpand.setIconResource(R.drawable.ic_map_collapse);
+        btnToggleMapExpand.setContentDescription("Thu nhỏ bản đồ");
+        layoutMapZoomControls.setVisibility(View.VISIBLE);
+
+        dialog.setOnDismissListener(d -> restoreMapToMiniSlot());
+        dialog.show();
+        if (mapViewStores != null) {
+            mapViewStores.invalidate();
+        }
+    }
+
+    /**
+     * Đưa cardMapContainer trở lại đúng khung mini-map ban đầu và ẩn cụm nút Zoom + / -.
+     */
+    private void restoreMapToMiniSlot() {
+        if (cardMapContainer != null && mapSlotContainer != null) {
+            ViewGroup currentParent = (ViewGroup) cardMapContainer.getParent();
+            if (currentParent != null && currentParent != mapSlotContainer) {
+                currentParent.removeView(cardMapContainer);
+            }
+            if (cardMapContainer.getParent() == null) {
+                mapSlotContainer.addView(cardMapContainer, new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                ));
+            }
+        }
+        isMapExpanded = false;
+        expandedMapDialog = null;
+        if (btnToggleMapExpand != null) {
+            btnToggleMapExpand.setIconResource(R.drawable.ic_map_expand);
+            btnToggleMapExpand.setContentDescription("Phóng to bản đồ");
+        }
+        if (layoutMapZoomControls != null) {
+            layoutMapZoomControls.setVisibility(View.GONE);
+        }
+        if (mapViewStores != null) {
+            mapViewStores.invalidate();
+        }
     }
 
     /**
@@ -426,10 +596,21 @@ public class StoreFragment extends Fragment {
     }
 
     /**
+     * Khóa/mở nút "Định vị gần nhất" khi đang chờ GPS trả về để tránh bấm dồn nhiều lần (debounce).
+     */
+    private void setLocatingState(boolean locating) {
+        isLocating = locating;
+        if (!isAdded() || btnLocateNearest == null) return;
+        btnLocateNearest.setEnabled(!locating);
+        btnLocateNearest.setText(locating ? "Đang định vị..." : "Định vị gần nhất");
+    }
+
+    /**
      * Kiểm tra quyền ACCESS_FINE_LOCATION / ACCESS_COARSE_LOCATION trước khi lấy tọa độ GPS.
      */
     private void checkPermissionAndLocateUser(boolean userClickedButton) {
         if (!isAdded()) return;
+        if (isLocating) return;
 
         boolean hasFine = ContextCompat.checkSelfPermission(requireContext(),
                 Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
@@ -449,16 +630,30 @@ public class StoreFragment extends Fragment {
     /**
      * Lấy tọa độ GPS thực tế từ FusedLocationProviderClient.
      * Khi người dùng bấm "Định vị gần nhất" (forceFreshLocation = true), ưu tiên gọi getCurrentLocation
-     * để ép Google Play Services lấy tọa độ mới nhất thay vì đọc cache vị trí cũ.
+     * với PRIORITY_BALANCED_POWER_ACCURACY kèm CancellationTokenSource để phản hồi nhanh và không bị đơ.
      */
     @SuppressLint("MissingPermission")
     private void fetchUserLocationAndCalculateDistances(boolean forceFreshLocation) {
         if (!isAdded()) return;
+        if (isLocating) return;
+
+        setLocatingState(true);
 
         if (forceFreshLocation) {
-            fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+            if (locationCancellationTokenSource != null) {
+                locationCancellationTokenSource.cancel();
+            }
+            locationCancellationTokenSource = new CancellationTokenSource();
+
+            fusedLocationClient.getCurrentLocation(
+                            Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                            locationCancellationTokenSource.getToken()
+                    )
                     .addOnSuccessListener(currLoc -> {
-                        if (!isAdded()) return;
+                        if (!isAdded()) {
+                            isLocating = false;
+                            return;
+                        }
                         if (currLoc != null) {
                             calculateNearestStoresInBackground(
                                     currLoc.getLatitude(),
@@ -478,10 +673,16 @@ public class StoreFragment extends Fragment {
 
     @SuppressLint("MissingPermission")
     private void fallbackToLastLocationOrDefault() {
-        if (!isAdded()) return;
+        if (!isAdded()) {
+            isLocating = false;
+            return;
+        }
         fusedLocationClient.getLastLocation()
                 .addOnSuccessListener(location -> {
-                    if (!isAdded()) return;
+                    if (!isAdded()) {
+                        isLocating = false;
+                        return;
+                    }
                     if (location != null) {
                         calculateNearestStoresInBackground(
                                 location.getLatitude(),
@@ -490,9 +691,20 @@ public class StoreFragment extends Fragment {
                                 "GPS thiết bị thực tế"
                         );
                     } else {
-                        fusedLocationClient.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, null)
+                        if (locationCancellationTokenSource != null) {
+                            locationCancellationTokenSource.cancel();
+                        }
+                        locationCancellationTokenSource = new CancellationTokenSource();
+
+                        fusedLocationClient.getCurrentLocation(
+                                        Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                                        locationCancellationTokenSource.getToken()
+                                )
                                 .addOnSuccessListener(currLoc -> {
-                                    if (!isAdded()) return;
+                                    if (!isAdded()) {
+                                        isLocating = false;
+                                        return;
+                                    }
                                     if (currLoc != null) {
                                         calculateNearestStoresInBackground(
                                                 currLoc.getLatitude(),
@@ -534,27 +746,31 @@ public class StoreFragment extends Fragment {
      * - Tại sao phải dùng Handler(Looper.getMainLooper())?
      *   -> Worker Thread không được phép chạm trực tiếp vào View/UI. Handler đẩy kết quả đã tính
      *      toán về Message Queue của Main Thread để cập nhật RecyclerView & MapView an toàn.
+     * - Tái sử dụng 1 SingleThreadExecutor duy nhất suốt vòng đời Fragment và shutdown trong onDestroy().
      */
     private void calculateNearestStoresInBackground(double userLat, double userLng,
                                                     List<StoreModel> stores, String locationSource) {
-        if (stores == null || stores.isEmpty()) return;
+        if (stores == null || stores.isEmpty()) {
+            setLocatingState(false);
+            return;
+        }
 
         this.currentUserLat = userLat;
         this.currentUserLng = userLng;
         this.hasUserLocation = true;
 
-        // 1. Tạo ExecutorService quản lý Worker Thread chạy ngầm
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        // 2. Tạo Handler gắn với Looper của Main Thread (UI Thread)
-        Handler mainHandler = new Handler(Looper.getMainLooper());
+        if (distanceExecutor == null || distanceExecutor.isShutdown()) {
+            distanceExecutor = Executors.newSingleThreadExecutor();
+        }
 
-        executor.execute(() -> {
+        final List<StoreModel> snapshot = new ArrayList<>(stores);
+
+        distanceExecutor.execute(() -> {
             // --- BẮT ĐẦU TÁC VỤ CHẠY NGẦM TRÊN WORKER THREAD ---
             long startTimeNs = System.nanoTime();
             String workerThreadName = Thread.currentThread().getName();
 
-            List<StoreModel> workingCopy = new ArrayList<>(stores);
-            for (StoreModel s : workingCopy) {
+            for (StoreModel s : snapshot) {
                 float[] result = new float[1];
                 Location.distanceBetween(
                         userLat, userLng,
@@ -566,16 +782,19 @@ public class StoreFragment extends Fragment {
             }
 
             // Sắp xếp danh sách Showroom theo khoảng cách tăng dần (gần nhất lên đầu)
-            Collections.sort(workingCopy, Comparator.comparingDouble(StoreModel::getDistanceKm));
+            Collections.sort(snapshot, Comparator.comparingDouble(StoreModel::getDistanceKm));
 
             double elapsedMs = (System.nanoTime() - startTimeNs) / 1_000_000.0;
 
             // --- ĐẨY KẾT QUẢ VỀ MAIN THREAD (UI THREAD) ĐỂ CẬP NHẬT GIAO DIỆN ---
             mainHandler.post(() -> {
-                if (!isAdded()) return;
+                if (!isAdded()) {
+                    isLocating = false;
+                    return;
+                }
 
                 storeList.clear();
-                storeList.addAll(workingCopy);
+                storeList.addAll(snapshot);
 
                 // Cập nhật danh sách RecyclerView và vẽ lại Marker kèm khoảng cách
                 storeAdapter.updateData(storeList);
@@ -598,11 +817,9 @@ public class StoreFragment extends Fragment {
                 ));
 
                 focusCameraOnStore(nearest, false);
+                setLocatingState(false);
             });
         });
-
-        // Giải phóng Executor sau khi hoàn tất nhiệm vụ
-        executor.shutdown();
     }
 
     /**
@@ -645,6 +862,30 @@ public class StoreFragment extends Fragment {
         super.onPause();
         if (mapViewStores != null) {
             mapViewStores.onPause();
+        }
+    }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        if (expandedMapDialog != null && expandedMapDialog.isShowing()) {
+            expandedMapDialog.dismiss();
+        }
+        expandedMapDialog = null;
+        isMapExpanded = false;
+        if (locationCancellationTokenSource != null) {
+            locationCancellationTokenSource.cancel();
+            locationCancellationTokenSource = null;
+        }
+        isLocating = false;
+        mainHandler.removeCallbacksAndMessages(null);
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        if (distanceExecutor != null && !distanceExecutor.isShutdown()) {
+            distanceExecutor.shutdownNow();
         }
     }
 }

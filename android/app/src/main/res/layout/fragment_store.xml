@@ -113,51 +113,145 @@
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- 3. Khung Bản đồ OpenStreetMap (osmdroid) bo góc 16dp -->
-    <com.google.android.material.card.MaterialCardView
+    <!-- 3. Khung Bản đồ OpenStreetMap (osmdroid) bo góc 16dp (có Slot cố định để hỗ trợ phóng to Dialog) -->
+    <FrameLayout
+        android:id="@+id/mapSlotContainer"
         android:layout_width="match_parent"
         android:layout_height="240dp"
         android:layout_marginStart="16dp"
         android:layout_marginTop="12dp"
-        android:layout_marginEnd="16dp"
-        app:cardBackgroundColor="@color/artifex_surface"
-        app:cardCornerRadius="16dp"
-        app:cardElevation="0dp"
-        app:strokeColor="@color/artifex_border"
-        app:strokeWidth="1dp">
+        android:layout_marginEnd="16dp">
 
-        <FrameLayout
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardMapContainer"
             android:layout_width="match_parent"
-            android:layout_height="match_parent">
+            android:layout_height="match_parent"
+            app:cardBackgroundColor="@color/artifex_surface"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="0dp"
+            app:strokeColor="@color/artifex_border"
+            app:strokeWidth="1dp">
 
-            <org.osmdroid.views.MapView
-                android:id="@+id/mapViewStores"
+            <FrameLayout
                 android:layout_width="match_parent"
-                android:layout_height="match_parent" />
+                android:layout_height="match_parent">
 
-            <!-- Nút Định vị GPS & Tính khoảng cách đa luồng -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnLocateNearest"
-                android:layout_width="wrap_content"
-                android:layout_height="40dp"
-                android:layout_gravity="bottom|end"
-                android:layout_margin="12dp"
-                android:backgroundTint="@color/artifex_primary"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                android:paddingStart="12dp"
-                android:paddingEnd="12dp"
-                android:text="Định vị gần nhất"
-                android:textAllCaps="false"
-                android:textColor="@color/artifex_on_primary"
-                android:textSize="12sp"
-                android:textStyle="bold"
-                app:cornerRadius="12dp"
-                app:icon="@drawable/ic_location"
-                app:iconSize="16dp"
-                app:iconTint="@color/artifex_on_primary" />
-        </FrameLayout>
-    </com.google.android.material.card.MaterialCardView>
+                <org.osmdroid.views.MapView
+                    android:id="@+id/mapViewStores"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+
+                <!-- Nút Phóng to / Thu nhỏ bản đồ (góc trên bên phải) -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnToggleMapExpand"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_gravity="top|end"
+                    android:layout_margin="12dp"
+                    android:contentDescription="Phóng to bản đồ"
+                    android:elevation="4dp"
+                    android:insetLeft="0dp"
+                    android:insetTop="0dp"
+                    android:insetRight="0dp"
+                    android:insetBottom="0dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:padding="0dp"
+                    app:backgroundTint="@color/artifex_surface"
+                    app:cornerRadius="10dp"
+                    app:icon="@drawable/ic_map_expand"
+                    app:iconGravity="textStart"
+                    app:iconPadding="0dp"
+                    app:iconSize="20dp"
+                    app:iconTint="@color/artifex_text_primary"
+                    app:strokeColor="@color/artifex_border"
+                    app:strokeWidth="1dp" />
+
+                <!-- Cụm nút Zoom + / - (chỉ hiển thị khi phóng to bản đồ) -->
+                <LinearLayout
+                    android:id="@+id/layoutMapZoomControls"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom|start"
+                    android:layout_margin="12dp"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnMapZoomIn"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:layout_marginBottom="8dp"
+                        android:contentDescription="Phóng to"
+                        android:elevation="4dp"
+                        android:insetLeft="0dp"
+                        android:insetTop="0dp"
+                        android:insetRight="0dp"
+                        android:insetBottom="0dp"
+                        android:minWidth="0dp"
+                        android:minHeight="0dp"
+                        android:padding="0dp"
+                        app:backgroundTint="@color/artifex_surface"
+                        app:cornerRadius="10dp"
+                        app:icon="@drawable/ic_plus"
+                        app:iconGravity="textStart"
+                        app:iconPadding="0dp"
+                        app:iconSize="20dp"
+                        app:iconTint="@color/artifex_text_primary"
+                        app:strokeColor="@color/artifex_border"
+                        app:strokeWidth="1dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnMapZoomOut"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:contentDescription="Thu nhỏ"
+                        android:elevation="4dp"
+                        android:insetLeft="0dp"
+                        android:insetTop="0dp"
+                        android:insetRight="0dp"
+                        android:insetBottom="0dp"
+                        android:minWidth="0dp"
+                        android:minHeight="0dp"
+                        android:padding="0dp"
+                        app:backgroundTint="@color/artifex_surface"
+                        app:cornerRadius="10dp"
+                        app:icon="@drawable/ic_minus"
+                        app:iconGravity="textStart"
+                        app:iconPadding="0dp"
+                        app:iconSize="20dp"
+                        app:iconTint="@color/artifex_text_primary"
+                        app:strokeColor="@color/artifex_border"
+                        app:strokeWidth="1dp" />
+                </LinearLayout>
+
+                <!-- Nút Định vị GPS & Tính khoảng cách đa luồng -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnLocateNearest"
+                    android:layout_width="wrap_content"
+                    android:layout_height="40dp"
+                    android:layout_gravity="bottom|end"
+                    android:layout_margin="12dp"
+                    android:backgroundTint="@color/artifex_primary"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:text="Định vị gần nhất"
+                    android:textAllCaps="false"
+                    android:textColor="@color/artifex_on_primary"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    app:cornerRadius="12dp"
+                    app:icon="@drawable/ic_location"
+                    app:iconSize="16dp"
+                    app:iconTint="@color/artifex_on_primary" />
+            </FrameLayout>
+        </com.google.android.material.card.MaterialCardView>
+    </FrameLayout>
 
     <!-- 4. Banner hiển thị Showroom gần nhất (Kết quả từ ExecutorService Worker Thread) -->
     <com.google.android.material.card.MaterialCardView
